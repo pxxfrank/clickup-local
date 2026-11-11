@@ -6,6 +6,7 @@ import {
   Folder as FolderIcon,
   Home,
   Inbox,
+  LayoutTemplate,
   MoreHorizontal,
   PanelLeftClose,
   Pencil,
@@ -49,6 +50,7 @@ export default function Sidebar({ open, onClose }) {
 
   const spaces = bootstrap?.spaces || [];
   const docs = bootstrap?.docs || [];
+  const templates = bootstrap?.templates || [];
   const workspace = bootstrap?.workspace;
   const activeListId = route.type === 'list' ? route.id : null;
   const activeDocId = route.type === 'doc' ? route.id : null;
@@ -129,9 +131,19 @@ export default function Sidebar({ open, onClose }) {
         });
         await refreshBootstrap();
         navigate(`/list/${created.id}`);
+      } else if (kind === 'template') {
+        if (!itemModal.templateId) throw new Error('请选择一个项目模板');
+        const created = await api.post(`/templates/${itemModal.templateId}/instantiate`, {
+          space_id: space.id,
+          folder_id: folder?.id || null,
+          name,
+        });
+        await refreshBootstrap();
+        navigate(`/list/${created.list.id}`);
+        toast(`已从模板创建「${created.list.name}」`);
       }
       setItemModal(null);
-      toast(kind === 'rename' ? '已保存修改' : '创建成功');
+      if (kind !== 'template') toast(kind === 'rename' ? '已保存修改' : '创建成功');
     } catch (error) {
       toast(error.message, 'error');
     } finally {
@@ -183,11 +195,14 @@ export default function Sidebar({ open, onClose }) {
   const [workspaceModalName, setWorkspaceModalName] = useState('');
 
   function openCreate(kind, space = null, folder = null) {
+    const templates = bootstrap?.templates || [];
+    const firstTemplate = kind === 'template' ? templates[0] : null;
     setItemModal({
       kind,
       space,
       folder,
-      name: '',
+      name: firstTemplate ? firstTemplate.name.replace(/模板$/, '').trim() : '',
+      templateId: firstTemplate?.id || '',
       color: functionColor(kind, space),
       icon: kind === 'space' ? '🚀' : kind === 'list' ? '📋' : '',
     });
@@ -380,6 +395,9 @@ export default function Sidebar({ open, onClose }) {
                           <MenuItem icon={<FolderIcon size={15} />} onClick={() => { close(); openCreate('folder', space, null); }}>
                             新建文件夹
                           </MenuItem>
+                          <MenuItem icon={<LayoutTemplate size={15} />} onClick={() => { close(); openCreate('template', space, null); }}>
+                            从模板创建项目
+                          </MenuItem>
                           <MenuDivider />
                           <MenuItem icon={<Pencil size={15} />} onClick={() => { close(); openRename(space, 'space'); }}>
                             编辑空间
@@ -419,6 +437,9 @@ export default function Sidebar({ open, onClose }) {
                                   <>
                                     <MenuItem icon={<Plus size={15} />} onClick={() => { close(); openCreate('list', space, folder); }}>
                                       新建列表
+                                    </MenuItem>
+                                    <MenuItem icon={<LayoutTemplate size={15} />} onClick={() => { close(); openCreate('template', space, folder); }}>
+                                      从模板创建项目
                                     </MenuItem>
                                     <MenuItem icon={<Settings size={15} />} onClick={() => { close(); openRename(folder, 'folder'); }}>
                                       重命名文件夹
@@ -524,7 +545,7 @@ export default function Sidebar({ open, onClose }) {
               <Settings size={16} />
             </IconButton>
           </div>
-          <div className="sidebar-version">ClickUp Local v1.0 · 数据保存在本机</div>
+          <div className="sidebar-version">ClickUp Local v1.1 · 数据保存在本机</div>
         </div>
       </aside>
 
@@ -538,16 +559,20 @@ export default function Sidebar({ open, onClose }) {
               ? '新建文件夹'
               : itemModal?.kind === 'list'
                 ? '新建列表'
-                : itemModal?.type === 'space'
-                  ? '编辑空间'
-                  : '重命名'
+                : itemModal?.kind === 'template'
+                  ? '从模板创建项目'
+                  : itemModal?.type === 'space'
+                    ? '编辑空间'
+                    : '重命名'
         }
         subtitle={
-          itemModal?.kind === 'rename'
-            ? itemModal?.type === 'space'
-              ? '修改空间的名称、图标和颜色'
-              : '修改名称后立即生效'
-            : '空间用于组织团队，文件夹和列表用于组织工作'
+          itemModal?.kind === 'template'
+            ? '复用已有项目的任务、工作流、字段和里程碑'
+            : itemModal?.kind === 'rename'
+              ? itemModal?.type === 'space'
+                ? '修改空间的名称、图标和颜色'
+                : '修改名称后立即生效'
+              : '空间用于组织团队，文件夹和列表用于组织工作'
         }
         width={460}
         footer={
@@ -555,17 +580,55 @@ export default function Sidebar({ open, onClose }) {
             <button type="button" className="btn btn-ghost" onClick={() => setItemModal(null)}>
               取消
             </button>
-            <button type="submit" form="tree-item-form" className="btn btn-primary" disabled={busy}>
+            <button
+              type="submit"
+              form="tree-item-form"
+              className="btn btn-primary"
+              disabled={busy || (itemModal?.kind === 'template' && !itemModal?.templateId)}
+            >
               {busy ? <Spinner size={15} /> : null}
-              {itemModal?.kind === 'rename' ? '保存' : '创建'}
+              {itemModal?.kind === 'rename' ? '保存' : itemModal?.kind === 'template' ? '创建项目' : '创建'}
             </button>
           </>
         }
       >
         {itemModal && (
           <form id="tree-item-form" className="stack" onSubmit={submitItem}>
+            {itemModal.kind === 'template' && (
+              <div className="field">
+                <span className="field-label">项目模板</span>
+                {templates.length ? (
+                  <div className="template-picker">
+                    {templates.map((template) => (
+                      <button
+                        type="button"
+                        key={template.id}
+                        className={`template-choice ${itemModal.templateId === template.id ? 'is-active' : ''}`}
+                        onClick={() =>
+                          setItemModal({
+                            ...itemModal,
+                            templateId: template.id,
+                            name: template.name.replace(/模板$/, '').trim() || itemModal.name,
+                          })
+                        }
+                      >
+                        <span className="template-choice-icon">{template.icon || '📋'}</span>
+                        <span>
+                          <strong>{template.name}</strong>
+                          <em>包含任务、工作流、字段与里程碑</em>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="template-empty-note">
+                    还没有项目模板。打开一个现有项目，在右上角「⋯」菜单中选择「另存为项目模板」。
+                  </div>
+                )}
+              </div>
+            )}
             <label className="field">
-              <span className="field-label">名称</span>
+              <span className="field-label">{itemModal.kind === 'template' ? '新项目名称' : '名称'}</span>
               <input
                 className="input"
                 autoFocus
@@ -576,7 +639,9 @@ export default function Sidebar({ open, onClose }) {
                     ? '例如：产品研发'
                     : itemModal.kind === 'folder'
                       ? '例如：移动端 App'
-                      : '例如：迭代计划'
+                      : itemModal.kind === 'template'
+                        ? '例如：2027 春季活动'
+                        : '例如：迭代计划'
                 }
               />
             </label>

@@ -6,6 +6,7 @@ import './styles.css';
 import './styles-pages.css';
 import './styles-views.css';
 import './styles-overlays.css';
+import './styles-features.css';
 import './styles-responsive.css';
 
 createRoot(document.getElementById('root')).render(

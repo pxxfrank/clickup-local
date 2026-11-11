@@ -6,6 +6,7 @@ import {
   Database,
   Download,
   HardDrive,
+  LayoutTemplate,
   Lock,
   Plus,
   Settings as SettingsIcon,
@@ -41,6 +42,8 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
   const [system, setSystem] = useState(null);
   const [busy, setBusy] = useState(false);
   const [removeMember, setRemoveMember] = useState(null);
+  const [removeContactTarget, setRemoveContactTarget] = useState(null);
+  const [deleteTemplateTarget, setDeleteTemplateTarget] = useState(null);
   const [deleteWorkspaceOpen, setDeleteWorkspaceOpen] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [deletingWorkspace, setDeletingWorkspace] = useState(false);
@@ -64,6 +67,9 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
     setInvite({ email: '', name: '', role: 'member' });
     setDeleteWorkspaceOpen(false);
     setDeleteConfirmName('');
+    setRemoveMember(null);
+    setRemoveContactTarget(null);
+    setDeleteTemplateTarget(null);
     api.get('/system').then(setSystem).catch(() => setSystem(null));
     // Intentionally only reinitialize when the dialog opens or the requested tab changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -103,6 +109,36 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
       await api.patch(`/workspaces/${bootstrap.workspace.id}`, workspaceForm);
       await refresh();
       toast('工作空间已更新');
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeContactNow() {
+    if (!removeContactTarget) return;
+    setBusy(true);
+    try {
+      await api.delete(`/workspaces/${bootstrap.workspace.id}/contacts/${removeContactTarget.id}`);
+      setRemoveContactTarget(null);
+      await refresh();
+      toast('已移除外部责任人');
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteTemplateNow() {
+    if (!deleteTemplateTarget) return;
+    setBusy(true);
+    try {
+      await api.delete(`/templates/${deleteTemplateTarget.id}`);
+      setDeleteTemplateTarget(null);
+      await refresh();
+      toast('项目模板已删除');
     } catch (error) {
       toast(error.message, 'error');
     } finally {
@@ -212,6 +248,7 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
     { id: 'profile', label: '个人资料', icon: User },
     { id: 'workspace', label: '工作空间', icon: SettingsIcon },
     { id: 'members', label: '成员', icon: Users, count: bootstrap?.members?.length },
+    { id: 'templates', label: '项目模板', icon: LayoutTemplate, count: bootstrap?.templates?.length },
     { id: 'tags', label: '标签', icon: TagIcon, count: bootstrap?.tags?.length },
   ];
 
@@ -447,6 +484,41 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
                   ))}
                 </div>
 
+                {bootstrap?.contacts?.length > 0 && (
+                  <>
+                    <div className="settings-divider" />
+                    <div className="settings-subhead">
+                      <Users size={15} />
+                      <div>
+                        <strong>外部责任人</strong>
+                        <span>无需加入工作空间，可以直接在任务中指派；不占用成员席位。</span>
+                      </div>
+                    </div>
+                    <div className="member-list external-contact-list">
+                      {bootstrap.contacts.map((contact) => (
+                        <div className="member-row" key={contact.id}>
+                          <Avatar user={contact} size={32} />
+                          <div className="member-main">
+                            <strong>{contact.name}<em className="external-badge">外部</em></strong>
+                            <span>{contact.title || '外部责任人'} · 仅用于任务指派</span>
+                          </div>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              className="icon-btn icon-btn-danger"
+                              onClick={() => setRemoveContactTarget(contact)}
+                              title="移除外部责任人"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="settings-hint">移除外部责任人后，指派给 TA 的任务会变为未指派。</p>
+                  </>
+                )}
+
                 {isAdmin && (
                   <>
                     <div className="settings-divider" />
@@ -495,6 +567,45 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
                     )}
                   </>
                 )}
+              </div>
+            )}
+
+            {tab === 'templates' && (
+              <div className="settings-form">
+                <div className="settings-content-head">
+                  <h3>项目模板</h3>
+                  <p>将一个项目保存为模板，复用相同的任务、工作流、自定义字段和里程碑。</p>
+                </div>
+                <div className="template-settings-list">
+                  {(bootstrap?.templates || []).map((template) => (
+                    <div className="template-setting-row" key={template.id}>
+                      <span className="template-setting-icon">{template.icon || '📋'}</span>
+                      <div className="template-setting-main">
+                        <strong>{template.name}</strong>
+                        <span>更新于 {relativeTime(template.updated_at)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="icon-btn icon-btn-danger"
+                        onClick={() => setDeleteTemplateTarget(template)}
+                        title="删除模板"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {!bootstrap?.templates?.length && (
+                    <div className="template-settings-empty">
+                      <LayoutTemplate size={22} />
+                      <p>还没有项目模板。</p>
+                      <span>在任意项目右上角的「⋯」菜单中选择「另存为项目模板」。</span>
+                    </div>
+                  )}
+                </div>
+                <div className="template-tip">
+                  <LayoutTemplate size={16} />
+                  <span>新建项目时，可以在空间或文件夹的「⋯」菜单中选择「从模板创建项目」。</span>
+                </div>
               </div>
             )}
 
@@ -593,6 +704,24 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
         busy={busy}
         onClose={() => setRemoveMember(null)}
         onConfirm={removeMemberNow}
+      />
+
+      <ConfirmDialog
+        open={Boolean(removeContactTarget)}
+        title="移除外部责任人"
+        message={`确定移除「${removeContactTarget?.name}」吗？指派给 TA 的任务会变为未指派，但任务本身不会被删除。`}
+        busy={busy}
+        onClose={() => setRemoveContactTarget(null)}
+        onConfirm={removeContactNow}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTemplateTarget)}
+        title="删除项目模板"
+        message={`确定删除模板「${deleteTemplateTarget?.name}」吗？由它创建的项目不会受到影响。`}
+        busy={busy}
+        onClose={() => setDeleteTemplateTarget(null)}
+        onConfirm={deleteTemplateNow}
       />
     </>
   );

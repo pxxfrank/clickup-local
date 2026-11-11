@@ -60,7 +60,10 @@ function AssigneeControl({ task, members, onUpdate }) {
                 close();
               }}
             >
-              {member.name}
+              <span className="person-menu-label">
+                {member.name}
+                {member.is_external && <em className="external-badge">外部</em>}
+              </span>
             </MenuItem>
           ))}
         </>

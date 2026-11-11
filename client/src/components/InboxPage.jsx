@@ -4,6 +4,9 @@ import {
   Bell,
   CheckCheck,
   FileText,
+  Flag,
+  LayoutTemplate,
+  Lightbulb,
   ListPlus,
   MessageSquare,
   Paperclip,
@@ -32,6 +35,10 @@ const TYPE_META = {
   space_created: { icon: Sparkles, color: '#A25DDC', label: '空间' },
   space_deleted: { icon: Trash2, color: '#E5484D', label: '空间' },
   doc_created: { icon: FileText, color: '#4A9EFF', label: '文档' },
+  contact_added: { icon: UserPlus, color: '#F59E0B', label: '外部责任人' },
+  template_created: { icon: LayoutTemplate, color: '#7B68EE', label: '模板' },
+  brainstorm_committed: { icon: Lightbulb, color: '#F2A93B', label: '头脑风暴' },
+  milestone_created: { icon: Flag, color: '#2EA44F', label: '里程碑' },
 };
 
 const FILTERS = [

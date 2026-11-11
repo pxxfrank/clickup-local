@@ -34,7 +34,13 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
   useEffect(() => {
     if (open && list) {
       setTab('status');
-      setGeneral({ name: list.name, description: list.description || '', color: list.color, icon: list.icon || '📋' });
+      setGeneral({
+        name: list.name,
+        description: list.description || '',
+        purpose: list.purpose || '',
+        color: list.color,
+        icon: list.icon || '📋',
+      });
       setEditingStatus(null);
       setNewStatus(null);
       setFieldDraft(null);
@@ -349,6 +355,16 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
                 value={general.description}
                 onChange={(event) => setGeneral({ ...general, description: event.target.value })}
                 placeholder="这个列表用来管理什么？"
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">项目背景与目的</span>
+              <textarea
+                className="input textarea"
+                rows={4}
+                value={general.purpose || ''}
+                onChange={(event) => setGeneral({ ...general, purpose: event.target.value })}
+                placeholder="为什么要做这个项目？希望达成什么结果？"
               />
             </label>
             <div className="field">

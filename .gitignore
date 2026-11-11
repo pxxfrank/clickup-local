@@ -3,6 +3,8 @@ data/
 dist/
 build/
 release/
+backups/
+shots/
 *.log
 .DS_Store
 Thumbs.db

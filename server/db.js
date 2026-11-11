@@ -43,6 +43,15 @@ CREATE TABLE IF NOT EXISTS workspace_members (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS workspace_contacts (
+  workspace_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (workspace_id, user_id),
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS spaces (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
@@ -72,6 +81,7 @@ CREATE TABLE IF NOT EXISTS lists (
   color TEXT NOT NULL DEFAULT '#7B68EE',
   icon TEXT DEFAULT '📋',
   description TEXT DEFAULT '',
+  purpose TEXT DEFAULT '',
   order_index INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   FOREIGN KEY (space_id) REFERENCES spaces(id) ON DELETE CASCADE,
@@ -108,6 +118,43 @@ CREATE TABLE IF NOT EXISTS tasks (
   archived INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE,
   FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS project_templates (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  icon TEXT DEFAULT '📋',
+  color TEXT NOT NULL DEFAULT '#7B68EE',
+  data TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS brainstorm_items (
+  id TEXT PRIMARY KEY,
+  list_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  order_index INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS milestones (
+  id TEXT PRIMARY KEY,
+  list_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  due_date TEXT NOT NULL,
+  completed INTEGER NOT NULL DEFAULT 0,
+  color TEXT NOT NULL DEFAULT '#7B68EE',
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS tags (
@@ -227,6 +274,9 @@ CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status_id);
 CREATE INDEX IF NOT EXISTS idx_activity_workspace ON activity(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_brainstorm_list ON brainstorm_items(list_id);
+CREATE INDEX IF NOT EXISTS idx_milestones_list ON milestones(list_id);
+CREATE INDEX IF NOT EXISTS idx_templates_workspace ON project_templates(workspace_id);
 `;
 
 let database = null;
@@ -239,6 +289,11 @@ export function getDb() {
   database.exec('PRAGMA journal_mode = WAL;');
   database.exec('PRAGMA foreign_keys = ON;');
   database.exec(SCHEMA);
+  // Lightweight migrations for databases created by older versions.
+  const listColumns = database.prepare('PRAGMA table_info(lists)').all();
+  if (!listColumns.some((column) => column.name === 'purpose')) {
+    database.exec("ALTER TABLE lists ADD COLUMN purpose TEXT DEFAULT ''");
+  }
   const row = database.prepare('SELECT COUNT(*) AS count FROM users').get();
   if (!row || row.count === 0) {
     seedDatabase(database);

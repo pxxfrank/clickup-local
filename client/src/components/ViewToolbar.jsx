@@ -28,7 +28,7 @@ const PRIORITY_FILTERS = [
 
 export default function ViewToolbar({ filters, setFilters, sort, setSort, group, setGroup, statuses, search, setSearch }) {
   const { bootstrap } = useApp();
-  const members = bootstrap?.members || [];
+  const members = bootstrap?.assignees || bootstrap?.members || [];
   const tags = bootstrap?.tags || [];
   const activeFilterCount =
     (filters.assignee !== 'all' ? 1 : 0) +
@@ -95,7 +95,7 @@ export default function ViewToolbar({ filters, setFilters, sort, setSort, group,
                   onClick={() =>
                     setFilters({ ...filters, assignee: filters.assignee === member.id ? 'all' : member.id })
                   }
-                  title={member.name}
+                  title={member.is_external ? `${member.name}（外部责任人）` : member.name}
                 >
                   <Avatar user={member} size={26} />
                 </button>

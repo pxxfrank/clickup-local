@@ -3,6 +3,9 @@ import {
   CalendarDays,
   GanttChartSquare,
   KanbanSquare,
+  LayoutDashboard,
+  LayoutTemplate,
+  Lightbulb,
   Link2,
   List as ListIcon,
   MoreHorizontal,
@@ -32,13 +35,17 @@ import ListView from './ListView.jsx';
 import BoardView from './BoardView.jsx';
 import CalendarView from './CalendarView.jsx';
 import GanttView from './GanttView.jsx';
+import BrainstormView from './BrainstormView.jsx';
+import ProjectOverview from './ProjectOverview.jsx';
 import ListSettingsModal from './ListSettingsModal.jsx';
 
 const VIEWS = [
   { id: 'list', label: '列表', icon: ListIcon },
+  { id: 'brainstorm', label: '头脑风暴', icon: Lightbulb },
   { id: 'board', label: '看板', icon: KanbanSquare },
   { id: 'calendar', label: '日历', icon: CalendarDays },
   { id: 'gantt', label: '甘特', icon: GanttChartSquare },
+  { id: 'overview', label: '概览', icon: LayoutDashboard },
 ];
 
 const DEFAULT_FILTERS = { assignee: 'all', priority: '', tagIds: [], statusIds: [], hideDone: false };
@@ -54,6 +61,9 @@ export default function ListPage({ listId, view, onViewChange }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateBusy, setTemplateBusy] = useState(false);
   const [prefs, setPrefs] = useLocalStorage(`clickup:view-prefs:${listId}`, {
     sort: 'manual',
     group: 'status',
@@ -92,6 +102,7 @@ export default function ListPage({ listId, view, onViewChange }) {
 
   const statuses = data?.statuses || [];
   const members = bootstrap?.members || [];
+  const assignees = bootstrap?.assignees || members;
   const list = data?.list;
 
   const filteredTasks = useMemo(() => {
@@ -136,7 +147,7 @@ export default function ListPage({ listId, view, onViewChange }) {
     if (!data) return [];
     if (group === 'none') return [{ key: 'all', label: '全部任务', kind: 'none', tasks: filteredTasks }];
     if (group === 'assignee') {
-      const result = members.map((member) => ({
+      const result = assignees.map((member) => ({
         key: member.id,
         label: member.name,
         kind: 'assignee',
@@ -172,7 +183,7 @@ export default function ListPage({ listId, view, onViewChange }) {
       status,
       tasks: filteredTasks.filter((task) => task.status_id === status.id),
     }));
-  }, [data, group, filteredTasks, members, statuses, filters.statusIds]);
+  }, [data, group, filteredTasks, assignees, statuses, filters.statusIds]);
 
   const stats = useMemo(() => {
     const tasks = data?.tasks || [];
@@ -268,6 +279,22 @@ export default function ListPage({ listId, view, onViewChange }) {
     }
   }
 
+  async function saveAsTemplate(event) {
+    event.preventDefault();
+    if (!templateName.trim()) return;
+    setTemplateBusy(true);
+    try {
+      await api.post(`/lists/${list.id}/templates`, { name: templateName.trim() });
+      setTemplateOpen(false);
+      await refresh();
+      toast('项目模板已保存，可在空间菜单或文件夹菜单中使用');
+    } catch (requestError) {
+      toast(requestError.message, 'error');
+    } finally {
+      setTemplateBusy(false);
+    }
+  }
+
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/#/list/${list.id}`);
@@ -345,6 +372,16 @@ export default function ListPage({ listId, view, onViewChange }) {
                         列表设置
                       </MenuItem>
                       <MenuItem
+                        icon={<LayoutTemplate size={15} />}
+                        onClick={() => {
+                          close();
+                          setTemplateName(`${list.name}模板`);
+                          setTemplateOpen(true);
+                        }}
+                      >
+                        另存为项目模板
+                      </MenuItem>
+                      <MenuItem
                         icon={<Link2 size={15} />}
                         onClick={() => {
                           close();
@@ -413,6 +450,7 @@ export default function ListPage({ listId, view, onViewChange }) {
                     key={item.id}
                     className={`view-tab ${view === item.id ? 'is-active' : ''}`}
                     onClick={() => onViewChange(item.id)}
+                    title={item.label}
                   >
                     <Icon size={15} />
                     {item.label}
@@ -444,7 +482,7 @@ export default function ListPage({ listId, view, onViewChange }) {
           <ListView
             groups={groups}
             statuses={statuses}
-            members={members}
+            members={assignees}
             onOpenTask={openTask}
             onComplete={handleComplete}
             onUpdateTask={handleUpdateTask}
@@ -469,6 +507,30 @@ export default function ListPage({ listId, view, onViewChange }) {
           />
         )}
         {view === 'gantt' && <GanttView tasks={filteredTasks} onOpenTask={openTask} />}
+        {view === 'brainstorm' && (
+          <BrainstormView
+            listId={list.id}
+            listName={list.name}
+            statuses={statuses}
+            onCommitted={async () => {
+              await refresh();
+              onViewChange('list');
+            }}
+          />
+        )}
+        {view === 'overview' && (
+          <ProjectOverview
+            list={list}
+            tasks={data.tasks}
+            milestones={data.milestones || []}
+            onChanged={refresh}
+            onOpenTask={openTask}
+            onSaveAsTemplate={() => {
+              setTemplateName(`${list.name}模板`);
+              setTemplateOpen(true);
+            }}
+          />
+        )}
       </div>
 
       <Modal
@@ -490,6 +552,41 @@ export default function ListPage({ listId, view, onViewChange }) {
             <span className="field-label">列表名称</span>
             <input className="input" autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} />
           </label>
+        </form>
+      </Modal>
+
+      <Modal
+        open={templateOpen}
+        onClose={() => setTemplateOpen(false)}
+        title="另存为项目模板"
+        subtitle="从当前项目复制一份可复用的项目模板"
+        width={460}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setTemplateOpen(false)}>取消</button>
+            <button type="submit" form="template-form" className="btn btn-primary" disabled={templateBusy || !templateName.trim()}>
+              {templateBusy ? <Spinner size={15} /> : <LayoutTemplate size={15} />} 保存模板
+            </button>
+          </>
+        }
+      >
+        <form id="template-form" className="stack" onSubmit={saveAsTemplate}>
+          <label className="field">
+            <span className="field-label">模板名称</span>
+            <input
+              className="input"
+              autoFocus
+              value={templateName}
+              onChange={(event) => setTemplateName(event.target.value)}
+              placeholder="例如：线上活动项目模板"
+            />
+          </label>
+          <div className="template-save-note">
+            <strong>将复制</strong>
+            <span>工作流状态、自定义字段、任务与子任务、检查清单、标签、里程碑、项目背景与目的</span>
+            <strong>不会复制</strong>
+            <span>评论、附件和成员邀请</span>
+          </div>
         </form>
       </Modal>
 

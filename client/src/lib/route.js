@@ -10,7 +10,7 @@ export function readRoute() {
       return {
         type: 'list',
         id: segments[1],
-        view: ['list', 'board', 'calendar', 'gantt'].includes(view) ? view : 'list',
+        view: ['list', 'brainstorm', 'board', 'calendar', 'gantt', 'overview'].includes(view) ? view : 'list',
         task: params.get('task') || null,
       };
     }

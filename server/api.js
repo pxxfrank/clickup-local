@@ -35,6 +35,126 @@ function workspaceRole(workspaceId, userId) {
   return row?.role || null;
 }
 
+function isAssignable(workspaceId, userId) {
+  if (!workspaceId || !userId) return false;
+  if (workspaceRole(workspaceId, userId)) return true;
+  return Boolean(
+    getDb()
+      .prepare('SELECT 1 AS ok FROM workspace_contacts WHERE workspace_id = ? AND user_id = ?')
+      .get(workspaceId, userId)
+  );
+}
+
+function dayOffsetFromToday(value) {
+  if (!value) return null;
+  const target = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(target.getTime())) return null;
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  return Math.round((target.getTime() - today.getTime()) / 86400000);
+}
+
+function dateFromDayOffset(offset) {
+  if (offset === null || offset === undefined || Number.isNaN(Number(offset))) return null;
+  return todayStr(Number(offset));
+}
+
+function buildTemplateSnapshot(listId) {
+  const db = getDb();
+  const list = db
+    .prepare(
+      `SELECT l.*, s.workspace_id FROM lists l JOIN spaces s ON s.id = l.space_id WHERE l.id = ?`
+    )
+    .get(listId);
+  if (!list) return null;
+  const statuses = db
+    .prepare('SELECT * FROM statuses WHERE list_id = ? ORDER BY order_index, rowid')
+    .all(listId);
+  const fields = db
+    .prepare('SELECT * FROM custom_fields WHERE list_id = ? ORDER BY order_index')
+    .all(listId)
+    .map((field) => ({
+      name: field.name,
+      type: field.type,
+      options: JSON.parse(field.options || '[]'),
+      order_index: field.order_index,
+    }));
+  const taskRows = db
+    .prepare(
+      `SELECT * FROM tasks WHERE list_id = ? AND archived = 0
+       ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, order_index, created_at`
+    )
+    .all(listId);
+  const indexByTaskId = new Map();
+  taskRows.forEach((task, index) => indexByTaskId.set(task.id, index));
+  const tasks = taskRows.map((task, index) => {
+    const tagRows = db
+      .prepare(
+        `SELECT tg.name, tg.color FROM task_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tt.task_id = ?`
+      )
+      .all(task.id);
+    const checklists = db.prepare('SELECT * FROM checklists WHERE task_id = ? ORDER BY order_index').all(task.id);
+    const checklistData = checklists.map((checklist) => ({
+      name: checklist.name,
+      items: db
+        .prepare('SELECT name, done FROM checklist_items WHERE checklist_id = ? ORDER BY order_index, rowid')
+        .all(checklist.id),
+    }));
+    const fieldValues = db
+      .prepare(
+        `SELECT cf.name, v.value FROM task_field_values v JOIN custom_fields cf ON cf.id = v.field_id WHERE v.task_id = ?`
+      )
+      .all(task.id);
+    const fieldValueMap = {};
+    for (const value of fieldValues) fieldValueMap[value.name] = value.value;
+    return {
+      index,
+      parent_index: task.parent_id ? indexByTaskId.get(task.parent_id) ?? null : null,
+      name: task.name,
+      description: task.description || '',
+      status_name: statuses.find((status) => status.id === task.status_id)?.name || statuses[0]?.name,
+      priority: task.priority,
+      assignee_id: task.assignee_id,
+      start_offset: dayOffsetFromToday(task.start_date),
+      due_offset: dayOffsetFromToday(task.due_date),
+      order_index: task.order_index,
+      tags: tagRows,
+      checklists: checklistData,
+      field_values: fieldValueMap,
+    };
+  });
+  const milestones = db
+    .prepare('SELECT * FROM milestones WHERE list_id = ? ORDER BY due_date, order_index')
+    .all(listId)
+    .map((milestone) => ({
+      name: milestone.name,
+      description: milestone.description || '',
+      due_offset: dayOffsetFromToday(milestone.due_date),
+      completed: Boolean(milestone.completed),
+      color: milestone.color,
+      order_index: milestone.order_index,
+    }));
+  return {
+    source_list: { name: list.name, icon: list.icon, color: list.color },
+    list: {
+      name: list.name,
+      icon: list.icon,
+      color: list.color,
+      description: list.description || '',
+      purpose: list.purpose || '',
+    },
+    statuses: statuses.map((status) => ({
+      name: status.name,
+      color: status.color,
+      type: status.type,
+      order_index: status.order_index,
+    })),
+    fields,
+    tasks,
+    milestones,
+  };
+}
+
 function accessibleList(listId, userId) {
   return getDb()
     .prepare(
@@ -294,6 +414,19 @@ export function createApiRouter() {
          JOIN users u ON u.id = m.user_id WHERE m.workspace_id = ? ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.name`
       )
       .all(workspace.id);
+    const contacts = db
+      .prepare(
+        `SELECT u.id, u.name, u.email, u.color, u.title FROM workspace_contacts c
+         JOIN users u ON u.id = c.user_id WHERE c.workspace_id = ? ORDER BY u.name`
+      )
+      .all(workspace.id)
+      .map((contact) => ({ ...contact, is_external: true }));
+    const templates = db
+      .prepare(
+        `SELECT id, name, icon, color, created_at, updated_at FROM project_templates
+         WHERE workspace_id = ? ORDER BY updated_at DESC`
+      )
+      .all(workspace.id);
     const tags = db.prepare('SELECT * FROM tags WHERE workspace_id = ? ORDER BY name').all(workspace.id);
     const docs = db
       .prepare(
@@ -316,6 +449,12 @@ export function createApiRouter() {
       role: workspace.role,
       spaces: tree,
       members,
+      contacts,
+      assignees: [
+        ...members.map((member) => ({ ...member, is_external: false })),
+        ...contacts,
+      ],
+      templates,
       tags,
       docs,
       unread_count: unreadCount,
@@ -338,7 +477,13 @@ export function createApiRouter() {
       .prepare(taskQuery(`t.list_id = ? AND t.parent_id IS NULL ${includeArchived ? '' : 'AND t.archived = 0'}`))
       .all(list.id);
     const tasks = attachTaskMeta(rows.map(shapeTask));
-    res.json({ list, statuses, fields, tasks });
+    const milestones = db
+      .prepare('SELECT * FROM milestones WHERE list_id = ? ORDER BY due_date, order_index, created_at')
+      .all(list.id);
+    const brainstormCount = db
+      .prepare('SELECT COUNT(*) AS c FROM brainstorm_items WHERE list_id = ?')
+      .get(list.id).c;
+    res.json({ list, statuses, fields, tasks, milestones, brainstorm_count: brainstormCount });
   });
 
   router.post('/tasks', (req, res) => {
@@ -360,7 +505,7 @@ export function createApiRouter() {
     if (!statusId) return res.status(400).json({ error: '列表缺少工作流状态' });
     const status = statusRows.find((s) => s.id === statusId);
     let assigneeId = body.assignee_id || null;
-    if (assigneeId && !workspaceRole(list.workspace_id, assigneeId)) assigneeId = null;
+    if (assigneeId && !isAssignable(list.workspace_id, assigneeId)) assigneeId = null;
     const maxOrder = db.prepare('SELECT COALESCE(MAX(order_index), 0) AS max FROM tasks WHERE list_id = ?').get(list.id).max;
     const id = randomId();
     const now = new Date().toISOString();
@@ -433,8 +578,8 @@ export function createApiRouter() {
     }
     if (body.assignee_id !== undefined) {
       let assigneeId = body.assignee_id || null;
-      if (assigneeId && !workspaceRole(existing.workspace_id, assigneeId)) {
-        return res.status(400).json({ error: '指派成员不在当前工作空间' });
+      if (assigneeId && !isAssignable(existing.workspace_id, assigneeId)) {
+        return res.status(400).json({ error: '该责任人不在当前工作空间的可指派名单中' });
       }
       updates.push('assignee_id = ?');
       values.push(assigneeId);
@@ -751,7 +896,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.0.0',
+      version: '1.1.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -1058,7 +1203,7 @@ export function createApiRouter() {
     const count = db.prepare('SELECT COUNT(*) AS c FROM lists WHERE space_id = ?').get(space.id).c;
     const now = new Date().toISOString();
     db.prepare(
-      'INSERT INTO lists (id, space_id, folder_id, name, color, icon, description, order_index, created_at) VALUES (?,?,?,?,?,?,?,?,?)'
+      'INSERT INTO lists (id, space_id, folder_id, name, color, icon, description, purpose, order_index, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)'
     ).run(
       id,
       space.id,
@@ -1067,6 +1212,7 @@ export function createApiRouter() {
       req.body?.color || '#7B68EE',
       req.body?.icon || '📋',
       String(req.body?.description || ''),
+      String(req.body?.purpose || ''),
       count,
       now
     );
@@ -1089,11 +1235,13 @@ export function createApiRouter() {
     if (!list) return res.status(404).json({ error: '列表不存在' });
     const name = req.body?.name !== undefined ? String(req.body.name).trim() || list.name : list.name;
     const description = req.body?.description !== undefined ? String(req.body.description) : list.description;
-    db.prepare('UPDATE lists SET name = ?, color = ?, icon = ?, description = ? WHERE id = ?').run(
+    const purpose = req.body?.purpose !== undefined ? String(req.body.purpose) : list.purpose;
+    db.prepare('UPDATE lists SET name = ?, color = ?, icon = ?, description = ?, purpose = ? WHERE id = ?').run(
       name,
       req.body?.color || list.color,
       req.body?.icon || list.icon,
       description,
+      purpose,
       list.id
     );
     res.json(accessibleList(list.id, req.user.id));
@@ -1236,6 +1384,471 @@ export function createApiRouter() {
     const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(req.params.id);
     if (!tag || !workspaceRole(tag.workspace_id, req.user.id)) return res.status(404).json({ error: '标签不存在' });
     db.prepare('DELETE FROM tags WHERE id = ?').run(tag.id);
+    res.json({ ok: true });
+  });
+
+  router.get('/lists/:id/brainstorm', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const items = db
+      .prepare('SELECT * FROM brainstorm_items WHERE list_id = ? ORDER BY order_index, created_at')
+      .all(list.id);
+    res.json({ items, count: items.length });
+  });
+
+  router.post('/lists/:id/brainstorm', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: '想法内容不能为空' });
+    const maxOrder = db
+      .prepare('SELECT COALESCE(MAX(order_index), 0) AS max FROM brainstorm_items WHERE list_id = ?')
+      .get(list.id).max;
+    const item = {
+      id: randomId(),
+      list_id: list.id,
+      name,
+      created_by: req.user.id,
+      created_at: new Date().toISOString(),
+      order_index: maxOrder + 1,
+    };
+    db.prepare(
+      'INSERT INTO brainstorm_items (id, list_id, name, created_by, created_at, order_index) VALUES (?,?,?,?,?,?)'
+    ).run(item.id, item.list_id, item.name, item.created_by, item.created_at, item.order_index);
+    res.status(201).json(item);
+  });
+
+  router.delete('/brainstorm/:id', (req, res) => {
+    const item = db
+      .prepare(
+        `SELECT b.*, s.workspace_id FROM brainstorm_items b
+         JOIN lists l ON l.id = b.list_id JOIN spaces s ON s.id = l.space_id
+         JOIN workspace_members m ON m.workspace_id = s.workspace_id AND m.user_id = ?
+         WHERE b.id = ?`
+      )
+      .get(req.user.id, req.params.id);
+    if (!item) return res.status(404).json({ error: '想法不存在' });
+    db.prepare('DELETE FROM brainstorm_items WHERE id = ?').run(item.id);
+    res.json({ ok: true });
+  });
+
+  router.post('/lists/:id/brainstorm/commit', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const items = db
+      .prepare('SELECT * FROM brainstorm_items WHERE list_id = ? ORDER BY order_index, created_at')
+      .all(list.id);
+    if (!items.length) return res.status(400).json({ error: '头脑风暴区还没有想法' });
+    const statuses = db.prepare('SELECT * FROM statuses WHERE list_id = ? ORDER BY order_index').all(list.id);
+    const target = statuses.find((status) => status.type === 'open') || statuses[0];
+    if (!target) return res.status(400).json({ error: '列表缺少可用的工作流状态' });
+    const maxOrder = db
+      .prepare('SELECT COALESCE(MAX(order_index), 0) AS max FROM tasks WHERE list_id = ?')
+      .get(list.id).max;
+    const now = new Date().toISOString();
+    db.exec('BEGIN');
+    try {
+      items.forEach((item, index) => {
+        db.prepare(
+          `INSERT INTO tasks (id, list_id, parent_id, name, description, status_id, priority, assignee_id, start_date, due_date, time_estimate, order_index, created_by, created_at, updated_at, completed_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ).run(
+          randomId(),
+          list.id,
+          null,
+          item.name,
+          '',
+          target.id,
+          0,
+          null,
+          null,
+          null,
+          null,
+          maxOrder + (index + 1) * 100,
+          req.user.id,
+          now,
+          now,
+          null
+        );
+      });
+      db.prepare('DELETE FROM brainstorm_items WHERE list_id = ?').run(list.id);
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+    logActivity(
+      list.workspace_id,
+      null,
+      req.user.id,
+      'brainstorm_committed',
+      `将 ${items.length} 条头脑风暴想法送入「${target.name}」`
+    );
+    res.json({ ok: true, created: items.length, status: target });
+  });
+
+  router.post('/lists/:id/milestones', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: '里程碑名称不能为空' });
+    const dueDate = String(req.body?.due_date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return res.status(400).json({ error: '请选择里程碑日期' });
+    const maxOrder = db.prepare('SELECT COALESCE(MAX(order_index), 0) AS max FROM milestones WHERE list_id = ?').get(list.id).max;
+    const id = randomId();
+    const now = new Date().toISOString();
+    db.prepare(
+      'INSERT INTO milestones (id, list_id, name, description, due_date, completed, color, order_index, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)'
+    ).run(
+      id,
+      list.id,
+      name,
+      String(req.body?.description || ''),
+      dueDate,
+      req.body?.completed ? 1 : 0,
+      req.body?.color || list.color || '#7B68EE',
+      maxOrder + 1,
+      now,
+      now
+    );
+    logActivity(list.workspace_id, null, req.user.id, 'milestone_created', `在「${list.name}」中新增里程碑「${name}」`);
+    res.status(201).json(db.prepare('SELECT * FROM milestones WHERE id = ?').get(id));
+  });
+
+  router.patch('/milestones/:id', (req, res) => {
+    const milestone = db
+      .prepare(
+        `SELECT m.*, s.workspace_id FROM milestones m JOIN lists l ON l.id = m.list_id
+         JOIN spaces s ON s.id = l.space_id JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = ?
+         WHERE m.id = ?`
+      )
+      .get(req.user.id, req.params.id);
+    if (!milestone) return res.status(404).json({ error: '里程碑不存在' });
+    const name = req.body?.name !== undefined ? String(req.body.name).trim() || milestone.name : milestone.name;
+    const dueDate = req.body?.due_date !== undefined ? String(req.body.due_date) : milestone.due_date;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return res.status(400).json({ error: '里程碑日期无效' });
+    db.prepare(
+      'UPDATE milestones SET name = ?, description = ?, due_date = ?, completed = ?, color = ?, updated_at = ? WHERE id = ?'
+    ).run(
+      name,
+      req.body?.description !== undefined ? String(req.body.description) : milestone.description,
+      dueDate,
+      req.body?.completed !== undefined ? (req.body.completed ? 1 : 0) : milestone.completed,
+      req.body?.color || milestone.color,
+      new Date().toISOString(),
+      milestone.id
+    );
+    res.json(db.prepare('SELECT * FROM milestones WHERE id = ?').get(milestone.id));
+  });
+
+  router.delete('/milestones/:id', (req, res) => {
+    const milestone = db
+      .prepare(
+        `SELECT m.*, s.workspace_id FROM milestones m JOIN lists l ON l.id = m.list_id
+         JOIN spaces s ON s.id = l.space_id JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = ?
+         WHERE m.id = ?`
+      )
+      .get(req.user.id, req.params.id);
+    if (!milestone) return res.status(404).json({ error: '里程碑不存在' });
+    db.prepare('DELETE FROM milestones WHERE id = ?').run(milestone.id);
+    res.json({ ok: true });
+  });
+
+  router.post('/lists/:id/templates', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const snapshot = buildTemplateSnapshot(list.id);
+    if (!snapshot) return res.status(404).json({ error: '列表不存在' });
+    const id = randomId();
+    const now = new Date().toISOString();
+    const name = String(req.body?.name || `${list.name}模板`).trim() || `${list.name}模板`;
+    db.prepare(
+      `INSERT INTO project_templates (id, workspace_id, name, icon, color, data, created_by, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?)`
+    ).run(id, list.workspace_id, name, list.icon || '📋', list.color, JSON.stringify(snapshot), req.user.id, now, now);
+    logActivity(list.workspace_id, null, req.user.id, 'template_created', `将项目「${list.name}」保存为模板「${name}」`);
+    const template = db.prepare('SELECT id, name, icon, color, created_at, updated_at FROM project_templates WHERE id = ?').get(id);
+    res.status(201).json(template);
+  });
+
+  router.delete('/templates/:id', (req, res) => {
+    const template = db.prepare('SELECT * FROM project_templates WHERE id = ?').get(req.params.id);
+    if (!template || !workspaceRole(template.workspace_id, req.user.id)) {
+      return res.status(404).json({ error: '模板不存在' });
+    }
+    db.prepare('DELETE FROM project_templates WHERE id = ?').run(template.id);
+    res.json({ ok: true });
+  });
+
+  router.post('/templates/:id/instantiate', (req, res) => {
+    const template = db.prepare('SELECT * FROM project_templates WHERE id = ?').get(req.params.id);
+    if (!template || !workspaceRole(template.workspace_id, req.user.id)) {
+      return res.status(404).json({ error: '模板不存在' });
+    }
+    const space = db
+      .prepare('SELECT * FROM spaces WHERE id = ? AND workspace_id = ?')
+      .get(req.body?.space_id, template.workspace_id);
+    if (!space) return res.status(400).json({ error: '目标空间不存在' });
+    let folderId = req.body?.folder_id || null;
+    if (folderId) {
+      const folder = db.prepare('SELECT id FROM folders WHERE id = ? AND space_id = ?').get(folderId, space.id);
+      if (!folder) folderId = null;
+    }
+    let data;
+    try {
+      data = JSON.parse(template.data || '{}');
+    } catch {
+      return res.status(400).json({ error: '模板数据已损坏' });
+    }
+    const listId = randomId();
+    const now = new Date().toISOString();
+    const projectName = String(req.body?.name || template.name).trim() || template.name;
+    const listData = data.list || {};
+    const statuses = Array.isArray(data.statuses) ? data.statuses : [];
+    const fields = Array.isArray(data.fields) ? data.fields : [];
+    const taskTemplates = Array.isArray(data.tasks) ? data.tasks : [];
+    const milestones = Array.isArray(data.milestones) ? data.milestones : [];
+    db.exec('BEGIN');
+    try {
+      const count = db.prepare('SELECT COUNT(*) AS c FROM lists WHERE space_id = ?').get(space.id).c;
+      db.prepare(
+        `INSERT INTO lists (id, space_id, folder_id, name, color, icon, description, purpose, order_index, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`
+      ).run(
+        listId,
+        space.id,
+        folderId,
+        projectName,
+        template.color || listData.color || '#7B68EE',
+        template.icon || listData.icon || '📋',
+        String(listData.description || ''),
+        String(listData.purpose || ''),
+        count,
+        now
+      );
+
+      const statusMap = new Map();
+      const statusSource = statuses.length ? statuses : DEFAULT_STATUSES.map(([name, color, type]) => ({ name, color, type }));
+      statusSource.forEach((status, index) => {
+        const statusId = randomId();
+        db.prepare('INSERT INTO statuses (id, list_id, name, color, type, order_index) VALUES (?,?,?,?,?,?)').run(
+          statusId,
+          listId,
+          status.name,
+          status.color || '#87909e',
+          status.type || 'open',
+          status.order_index ?? index
+        );
+        statusMap.set(status.name, { id: statusId, type: status.type || 'open' });
+      });
+
+      const fieldMap = new Map();
+      fields.forEach((field, index) => {
+        const fieldId = randomId();
+        db.prepare('INSERT INTO custom_fields (id, list_id, name, type, options, order_index) VALUES (?,?,?,?,?,?)').run(
+          fieldId,
+          listId,
+          field.name,
+          field.type || 'text',
+          JSON.stringify(Array.isArray(field.options) ? field.options : []),
+          field.order_index ?? index
+        );
+        fieldMap.set(field.name, fieldId);
+      });
+
+      const tagMap = new Map();
+      function ensureTag(tagName, tagColor) {
+        if (!tagName) return null;
+        if (tagMap.has(tagName)) return tagMap.get(tagName);
+        let tag = db.prepare('SELECT * FROM tags WHERE workspace_id = ? AND lower(name) = lower(?)').get(template.workspace_id, tagName);
+        if (!tag) {
+          const tagId = randomId();
+          db.prepare('INSERT INTO tags (id, workspace_id, name, color) VALUES (?,?,?,?)').run(
+            tagId,
+            template.workspace_id,
+            tagName,
+            tagColor || '#7B68EE'
+          );
+          tag = { id: tagId };
+        }
+        tagMap.set(tagName, tag.id);
+        return tag.id;
+      }
+
+      const firstStatus = [...statusMap.values()][0];
+      const taskIdByIndex = new Map();
+      for (const task of taskTemplates) {
+        const status = statusMap.get(task.status_name) || firstStatus;
+        if (!status) continue;
+        const parentId = task.parent_index !== null && task.parent_index !== undefined ? taskIdByIndex.get(task.parent_index) || null : null;
+        if (task.parent_index !== null && task.parent_index !== undefined && !parentId) continue;
+        const taskId = randomId();
+        const assigneeId =
+          task.assignee_id && isAssignable(template.workspace_id, task.assignee_id) ? task.assignee_id : null;
+        const completedAt = ['done', 'closed'].includes(status.type) ? now : null;
+        db.prepare(
+          `INSERT INTO tasks (id, list_id, parent_id, name, description, status_id, priority, assignee_id, start_date, due_date, time_estimate, order_index, created_by, created_at, updated_at, completed_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ).run(
+          taskId,
+          listId,
+          parentId,
+          task.name,
+          String(task.description || ''),
+          status.id,
+          Number(task.priority) || 0,
+          assigneeId,
+          dateFromDayOffset(task.start_offset),
+          dateFromDayOffset(task.due_offset),
+          null,
+          Number(task.order_index) || 100,
+          req.user.id,
+          now,
+          now,
+          completedAt
+        );
+        taskIdByIndex.set(task.index, taskId);
+        for (const tag of Array.isArray(task.tags) ? task.tags : []) {
+          const tagId = ensureTag(tag.name, tag.color);
+          if (tagId) db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(taskId, tagId);
+        }
+        if (task.field_values && typeof task.field_values === 'object') {
+          for (const [fieldName, value] of Object.entries(task.field_values)) {
+            const fieldId = fieldMap.get(fieldName);
+            if (fieldId && value !== null && value !== '') {
+              db.prepare('INSERT INTO task_field_values (task_id, field_id, value) VALUES (?,?,?)').run(taskId, fieldId, String(value));
+            }
+          }
+        }
+        for (const checklist of Array.isArray(task.checklists) ? task.checklists : []) {
+          const checklistId = randomId();
+          db.prepare('INSERT INTO checklists (id, task_id, name, order_index) VALUES (?,?,?,?)').run(
+            checklistId,
+            taskId,
+            checklist.name || '检查清单',
+            0
+          );
+          (Array.isArray(checklist.items) ? checklist.items : []).forEach((item, index) => {
+            db.prepare('INSERT INTO checklist_items (id, checklist_id, name, done, order_index) VALUES (?,?,?,?,?)').run(
+              randomId(),
+              checklistId,
+              item.name,
+              item.done ? 1 : 0,
+              index
+            );
+          });
+        }
+      }
+
+      milestones.forEach((milestone, index) => {
+        db.prepare(
+          'INSERT INTO milestones (id, list_id, name, description, due_date, completed, color, order_index, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)'
+        ).run(
+          randomId(),
+          listId,
+          milestone.name || '里程碑',
+          String(milestone.description || ''),
+          dateFromDayOffset(milestone.due_offset) || todayStr(14),
+          milestone.completed ? 1 : 0,
+          milestone.color || template.color || '#7B68EE',
+          milestone.order_index ?? index,
+          now,
+          now
+        );
+      });
+
+      logActivity(template.workspace_id, null, req.user.id, 'list_created', `从模板「${template.name}」创建了项目「${projectName}」`);
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+    res.status(201).json({
+      list: accessibleList(listId, req.user.id),
+      task_count: taskTemplates.length,
+      milestone_count: milestones.length,
+    });
+  });
+
+  router.post('/workspaces/:id/contacts', (req, res) => {
+    const workspaceId = req.params.id;
+    if (!workspaceRole(workspaceId, req.user.id)) return res.status(403).json({ error: '没有权限' });
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: '责任人姓名不能为空' });
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return res.status(400).json({ error: '邮箱格式不正确' });
+    }
+    let user = email ? db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(email) : null;
+    if (!user && !email) {
+      const existingMember = db
+        .prepare(
+          `SELECT u.* FROM workspace_members m JOIN users u ON u.id = m.user_id
+           WHERE m.workspace_id = ? AND lower(u.name) = lower(?) LIMIT 1`
+        )
+        .get(workspaceId, name);
+      if (existingMember) user = existingMember;
+    }
+    if (!user) {
+      const existingContact = db
+        .prepare(
+          `SELECT u.* FROM workspace_contacts c JOIN users u ON u.id = c.user_id
+           WHERE c.workspace_id = ? AND lower(u.name) = lower(?) LIMIT 1`
+        )
+        .get(workspaceId, name);
+      if (existingContact) user = existingContact;
+    }
+    if (!user) {
+      const id = randomId();
+      const placeholderEmail = email || `external-${id.slice(0, 8)}@clickup.local`;
+      const { hash, salt } = hashPassword(randomId());
+      const colors = ['#7B68EE', '#4A9EFF', '#26C6DA', '#2EA44F', '#F59E0B', '#FF8A65', '#E5484D', '#A25DDC'];
+      db.prepare(
+        'INSERT INTO users (id, name, email, password_hash, password_salt, color, title, created_at) VALUES (?,?,?,?,?,?,?,?)'
+      ).run(
+        id,
+        name,
+        placeholderEmail,
+        hash,
+        salt,
+        req.body?.color || colors[Math.floor(Math.random() * colors.length)],
+        String(req.body?.title || '外部责任人'),
+        new Date().toISOString()
+      );
+      user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    }
+    const alreadyContact = db
+      .prepare('SELECT 1 FROM workspace_contacts WHERE workspace_id = ? AND user_id = ?')
+      .get(workspaceId, user.id);
+    const isMember = Boolean(workspaceRole(workspaceId, user.id));
+    if (!alreadyContact && !isMember) {
+      db.prepare('INSERT INTO workspace_contacts (workspace_id, user_id, created_at) VALUES (?,?,?)').run(
+        workspaceId,
+        user.id,
+        new Date().toISOString()
+      );
+      logActivity(workspaceId, null, req.user.id, 'contact_added', `添加了外部责任人 ${user.name}`);
+    }
+    res.status(alreadyContact || isMember ? 200 : 201).json({
+      ...publicUser(user),
+      is_external: !isMember,
+    });
+  });
+
+  router.delete('/workspaces/:id/contacts/:userId', (req, res) => {
+    const workspaceId = req.params.id;
+    if (!workspaceRole(workspaceId, req.user.id)) return res.status(403).json({ error: '没有权限' });
+    const userId = req.params.userId;
+    if (workspaceRole(workspaceId, userId)) {
+      return res.status(400).json({ error: '该人员是团队成员，不能作为外部责任人移除' });
+    }
+    db.prepare('DELETE FROM workspace_contacts WHERE workspace_id = ? AND user_id = ?').run(workspaceId, userId);
+    db.prepare(
+      `UPDATE tasks SET assignee_id = NULL
+       WHERE assignee_id = ? AND list_id IN (
+         SELECT l.id FROM lists l JOIN spaces s ON s.id = l.space_id WHERE s.workspace_id = ?
+       )`
+    ).run(userId, workspaceId);
     res.json({ ok: true });
   });
 

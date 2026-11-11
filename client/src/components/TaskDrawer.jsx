@@ -20,6 +20,7 @@ import {
   Tag as TagIcon,
   Trash2,
   Upload,
+  UserPlus,
   UserRound,
   X,
 } from 'lucide-react';
@@ -66,11 +67,13 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [contactDraft, setContactDraft] = useState('');
+  const [addingContact, setAddingContact] = useState(false);
   const fileInputRef = useRef(null);
   const titleRef = useRef(null);
   const commentsEndRef = useRef(null);
 
-  const workspaceMembers = bootstrap?.members || members || [];
+  const assignablePeople = bootstrap?.assignees || bootstrap?.members || [];
   const workspaceTags = bootstrap?.tags || [];
 
   useEffect(() => {
@@ -84,6 +87,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
     setError('');
     setTab('detail');
     setEditingDescription(false);
+    setContactDraft('');
     api
       .get(`/tasks/${taskId}`)
       .then((data) => {
@@ -361,6 +365,25 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
     }
   }
 
+  async function addExternalAssignee(name, close) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed || !detail) return;
+    setAddingContact(true);
+    try {
+      const contact = await api.post(`/workspaces/${detail.list.workspace_id}/contacts`, { name: trimmed });
+      const updated = await api.patch(`/tasks/${detail.id}`, { assignee_id: contact.id });
+      setDetail(updated);
+      setContactDraft('');
+      await refresh();
+      toast(`已指派给外部责任人「${contact.name}」`);
+      close?.();
+    } catch (requestError) {
+      toast(requestError.message, 'error');
+    } finally {
+      setAddingContact(false);
+    }
+  }
+
   async function copyTaskLink() {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/#/list/${detail.list_id}?task=${detail.id}`);
@@ -511,16 +534,39 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                           >
                             未指派
                           </MenuItem>
-                          {workspaceMembers.map((member) => (
+                          {assignablePeople.map((member) => (
                             <MenuItem
                               key={member.id}
                               active={member.id === detail.assignee_id}
                               icon={<Avatar user={member} size={22} />}
                               onClick={() => { patchTask({ assignee_id: member.id }); close(); }}
                             >
-                              {member.name}
+                              <span className="person-menu-label">
+                                {member.name}
+                                {member.is_external && <em className="external-badge">外部</em>}
+                              </span>
                             </MenuItem>
                           ))}
+                          <MenuDivider />
+                          <form
+                            className="assignee-add-form"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              addExternalAssignee(contactDraft, close);
+                            }}
+                          >
+                            <UserPlus size={14} />
+                            <input
+                              value={contactDraft}
+                              onChange={(event) => setContactDraft(event.target.value)}
+                              placeholder="输入姓名，添加外部责任人"
+                              disabled={addingContact}
+                            />
+                            <button type="submit" className="btn btn-primary btn-xs" disabled={addingContact || !contactDraft.trim()}>
+                              {addingContact ? <Spinner size={12} /> : '添加'}
+                            </button>
+                          </form>
+                          <p className="assignee-add-hint">外部责任人无需加入工作空间，添加后会保留在指派列表中。</p>
                         </>
                       )}
                     </Popover>

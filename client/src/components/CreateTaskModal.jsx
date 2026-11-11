@@ -20,7 +20,7 @@ export default function CreateTaskModal({ defaults, onClose }) {
 
   const open = Boolean(defaults);
   const lists = useMemo(() => flattenLists(bootstrap?.spaces || []), [bootstrap]);
-  const members = bootstrap?.members || [];
+  const members = bootstrap?.assignees || bootstrap?.members || [];
 
   useEffect(() => {
     if (!open) return;
@@ -149,7 +149,7 @@ export default function CreateTaskModal({ defaults, onClose }) {
                 <select value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)}>
                   <option value="">未指派</option>
                   {members.map((member) => (
-                    <option key={member.id} value={member.id}>{member.name}</option>
+                    <option key={member.id} value={member.id}>{member.name}{member.is_external ? '（外部）' : ''}</option>
                   ))}
                 </select>
                 <ChevronDown size={13} />
