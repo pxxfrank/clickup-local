@@ -39,8 +39,9 @@
 
 不想处理 Node.js、命令行或端口环境时，可以直接使用 Windows 安装包：
 
-**下载：** [GitHub Releases](https://github.com/pxxfrank/clickup-local/releases/latest)  
-**文件名：** `ClickUp-Local-Setup-1.0.0.exe`（约 24 MB，已内置 Node.js 运行时）
+**直接下载：** [ClickUp-Local-Setup-1.0.0.exe](https://github.com/pxxfrank/clickup-local/releases/download/v1.0.0/ClickUp-Local-Setup-1.0.0.exe)  
+**发布页：** [GitHub Releases](https://github.com/pxxfrank/clickup-local/releases/latest)  
+**文件名：** `ClickUp-Local-Setup-1.0.0.exe`（约 24.3 MB，已内置 Node.js 运行时）
 
 安装包支持 Windows 10 / 11 x64，安装到当前用户目录，**不需要管理员权限**，也不需要预装 Node.js。
 
@@ -63,6 +64,8 @@
 卸载默认保留数据与日志；确认不再使用时手动删除 `%LOCALAPPDATA%\ClickUpLocal`。
 
 安装版使用独立的 `%LOCALAPPDATA%\ClickUpLocal\data` 目录。如果要从源码版迁移数据，请先停止两边的服务，再将源码目录中的 `data\clickup.db` 和 `data\uploads\` 复制到该目录。
+
+> 安装版与源码版默认都监听 `23090` 端口，请勿同时启动。若之前运行过源码版，请先关闭其服务再启动安装版。
 
 > 安装包未使用商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”。
 > 如需从源码重新构建安装包：
