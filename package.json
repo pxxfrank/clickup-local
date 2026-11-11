@@ -1,0 +1,33 @@
+{
+  "name": "clickup-local",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ClickUp 风格的单机项目管理应用",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -n API,WEB -c magenta,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "node --watch server/index.js --dev",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "start:open": "node server/index.js --open",
+    "serve": "node server/index.js --open"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "dompurify": "^3.4.17",
+    "express": "^4.21.2",
+    "lucide-react": "^0.468.0",
+    "marked": "^18.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "vite": "^6.0.7"
+  }
+}

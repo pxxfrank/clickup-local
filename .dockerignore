@@ -1,0 +1,14 @@
+node_modules
+data
+dist
+shots
+docs/screenshots
+.git
+.gitignore
+*.log
+server.out.log
+server.err.log
+vite.out.log
+vite.err.log
+tests
+scripts/*.mjs

@@ -1,0 +1,12 @@
+services:
+  clickup:
+    build: .
+    container_name: clickup-local
+    restart: unless-stopped
+    ports:
+      - "23090:23090"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=23090
+    volumes:
+      - ./data:/app/data

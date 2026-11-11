@@ -1,0 +1,236 @@
+# ClickUp 本地版
+
+> 一个可单机部署、在浏览器中使用的 ClickUp 风格团队工作空间。
+> 不包含任何 AI 功能，数据全部保存在你自己的电脑上。
+
+![主页](docs/screenshots/home.png)
+
+## 功能
+
+| 模块 | 能力 |
+| --- | --- |
+| 工作空间 | 多工作空间、空间、文件夹、列表的层级组织；成员与角色管理 |
+| 任务 | 状态、优先级、负责人、开始/截止日期、标签、自定义字段、Markdown 描述 |
+| 协作 | 子任务、检查清单、评论、动态记录、附件上传（单文件最大 20MB） |
+| 视图 | 列表、看板、日历、甘特图；拖拽移动看板任务 |
+| 效率 | 筛选、排序、分组、当前列表搜索、全局搜索（`Ctrl/⌘ + K`） |
+| 工作台 | 主页统计、我的任务、完成趋势、工作负载、团队动态、收件箱未读 |
+| 文档 | 工作空间级 Markdown 文档，自动保存、预览与编辑 |
+| 设置 | 个人资料与密码、工作空间信息、成员邀请、标签管理、工作流状态与自定义字段 |
+| 部署 | Windows 一键启动、开机自启服务安装、Docker 部署、SQLite 数据文件备份 |
+
+### 界面截图
+
+| 列表视图 | 看板视图 |
+| --- | --- |
+| ![列表](docs/screenshots/list.png) | ![看板](docs/screenshots/board.png) |
+
+| 日历视图 | 甘特图 |
+| --- | --- |
+| ![日历](docs/screenshots/calendar.png) | ![甘特图](docs/screenshots/gantt.png) |
+
+| 任务详情 | 文档 |
+| --- | --- |
+| ![任务详情](docs/screenshots/task.png) | ![文档](docs/screenshots/docs.png) |
+
+![移动端](docs/screenshots/mobile-list.png)
+
+## 快速开始
+
+### 环境要求
+
+- **Node.js 24 或更高版本**（项目使用 Node 内置的 `node:sqlite`，无需安装数据库）
+- 现代浏览器（Chrome / Edge / Firefox / Safari）
+
+### Windows：双击启动
+
+双击项目根目录的 **`start-clickup.cmd`**。
+
+脚本会自动检查依赖和前端构建结果，启动本地服务并打开：
+
+```
+http://127.0.0.1:23090
+```
+
+### 命令行启动
+
+```bash
+npm install
+npm run build
+npm start -- --open
+```
+
+开发模式（前端热更新 + API 代理）：
+
+```bash
+npm run dev
+# 前端：http://localhost:5173
+# API： http://127.0.0.1:23090
+```
+
+### 演示账号
+
+首次启动会自动写入一套完整的演示数据（星野科技团队）：
+
+```
+邮箱：demo@clickup.local
+密码：demo1234
+```
+
+登录页上的「使用演示工作空间」按钮可以一键进入。演示数据只会在数据库为空时写入一次。
+
+## 安装为开机自启服务
+
+如果希望 ClickUp 在登录 Windows 后自动在后台运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-service.ps1
+```
+
+安装脚本会：
+
+- 注册名为 `ClickUpLocal` 的登录自启任务（后台隐藏运行）
+- 在桌面创建「ClickUp 本地版」快捷方式
+- 立即启动服务并打开浏览器
+
+指定其他端口：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-service.ps1 -Port 23100
+```
+
+卸载：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\uninstall-service.ps1
+# 同时删除本地数据库和附件（不可撤销）：
+powershell -ExecutionPolicy Bypass -File scripts\uninstall-service.ps1 -RemoveData
+```
+
+安装脚本不会删除项目文件，数据默认保留在 `data` 目录。
+
+## 配置
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `PORT` | `23090` | HTTP 端口 |
+| `HOST` | `127.0.0.1` | 监听地址；设为 `0.0.0.0` 可供局域网访问 |
+| `CLICKUP_DATA_DIR` | `./data` | 数据库与附件的存放目录 |
+
+也可以使用命令行参数指定端口：
+
+```bash
+npm start -- --port 23100
+```
+
+局域网访问（同一 Wi-Fi / 内网）：
+
+```powershell
+$env:HOST = "0.0.0.0"
+npm start
+# 其他设备访问 http://<你的电脑IP>:23090
+```
+
+> 如果开启了 Windows 防火墙，需要允许 Node.js 或该端口的入站连接。
+> 局域网部署建议配合反向代理与 HTTPS，并修改演示账号密码。
+
+## 数据与备份
+
+- 数据库：`data/clickup.db`（SQLite，WAL 模式）
+- 附件：`data/uploads/`
+- 备份：进入 **设置 → 工作空间 → 下载数据库备份**，或直接复制整个 `data` 目录
+- 恢复：停止服务后，用备份文件替换 `data/clickup.db`（恢复时建议同时移除 `clickup.db-wal` / `clickup.db-shm`）
+
+应用没有云端依赖，不会向外部服务器上传数据。
+
+## Docker 部署
+
+适合 NAS、Linux 小主机或习惯容器化的场景：
+
+```bash
+docker compose up -d --build
+# 打开 http://127.0.0.1:23090
+```
+
+或者：
+
+```bash
+docker build -t clickup-local .
+docker run -d --name clickup-local \
+  -p 23090:23090 \
+  -v "$(pwd)/data:/app/data" \
+  clickup-local
+```
+
+容器内默认监听 `0.0.0.0:23090`，数据挂载到宿主机的 `data` 目录。
+
+## 技术实现
+
+- **前端**：React 19 + Vite，CSS 设计系统，`lucide-react` 图标，`marked` + `DOMPurify` Markdown 渲染
+- **后端**：Node.js + Express，REST API
+- **数据库**：Node 内置 `node:sqlite`（SQLite）
+- **认证**：`scrypt` 密码哈希 + HttpOnly 会话 Cookie
+- **部署**：单进程服务，同时托管 API 与静态前端
+
+### 目录结构
+
+```
+server/
+  index.js       服务入口、静态文件托管
+  api.js         全部 REST API
+  auth.js        登录、注册、会话
+  db.js          SQLite 表结构
+  seed.js        演示数据
+  security.js    密码与令牌工具
+client/
+  src/
+    components/  页面、视图、弹窗与任务详情
+    lib/         API、日期、Markdown、路由工具
+    styles*.css  设计系统与响应式样式
+scripts/
+  install-service.ps1 / uninstall-service.ps1
+  run-hidden.vbs
+start-clickup.cmd
+Dockerfile / docker-compose.yml
+```
+
+### 主要 API
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/api/auth/login` | 登录 |
+| `POST` | `/api/auth/register` | 注册并创建个人工作空间 |
+| `GET` | `/api/bootstrap` | 工作空间树、成员、标签、未读数 |
+| `GET` | `/api/lists/:id` | 列表、状态、字段与任务 |
+| `POST/PATCH/DELETE` | `/api/tasks`、`/api/tasks/:id` | 任务 CRUD |
+| `POST` | `/api/tasks/:id/move` | 看板拖拽排序 |
+| `POST` | `/api/tasks/:id/comments` | 评论 |
+| `GET` | `/api/search?q=` | 全局搜索 |
+| `GET` | `/api/home` | 主页统计 |
+| `GET/POST` | `/api/inbox`、`/api/inbox/read` | 动态与已读状态 |
+| `GET/POST/PATCH` | `/api/docs`、`/api/docs/:id` | 文档 |
+| `GET` | `/api/backup` | 下载数据库备份 |
+
+完整接口可在 `server/api.js` 中查看。
+
+## 快捷键
+
+| 快捷键 | 功能 |
+| --- | --- |
+| `Ctrl/⌘ + K` | 打开全局搜索 |
+| `N` | 新建任务（不在输入框中时） |
+| `Esc` | 关闭搜索、弹窗或任务详情 |
+| `Ctrl/⌘ + Enter` | 在新建任务/评论框中提交 |
+
+## 说明与限制
+
+- 这是一个以本地优先为目标的 ClickUp 风格实现，并非 ClickUp 官方产品，也不追求像素级复刻。
+- 不包含 AI、第三方集成、邮件通知、实时多人推送（WebSocket）等功能。
+- 团队协作以同一台机器上的多个账号进行；要跨设备使用，请通过局域网地址访问。
+- 附件上限 20MB，存储在本地 `data/uploads`。
+- 使用 Node 24 启动时控制台可能出现 `node:sqlite` 的 ExperimentalWarning，不影响功能。
+- 首次登录后建议在「个人资料」中修改演示账号密码，并定期下载数据备份。
+
+## License
+
+本项目仅用于学习与自托管实践。ClickUp 是 ClickUp Software 的商标；本项目与 ClickUp 官方无关。
