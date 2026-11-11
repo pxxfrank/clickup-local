@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
+  ClipboardCheck,
   GanttChartSquare,
   KanbanSquare,
   LayoutDashboard,
@@ -37,6 +38,7 @@ import CalendarView from './CalendarView.jsx';
 import GanttView from './GanttView.jsx';
 import BrainstormView from './BrainstormView.jsx';
 import ProjectOverview from './ProjectOverview.jsx';
+import RetrospectiveView from './RetrospectiveView.jsx';
 import ListSettingsModal from './ListSettingsModal.jsx';
 
 const VIEWS = [
@@ -46,6 +48,7 @@ const VIEWS = [
   { id: 'board', label: '看板', icon: KanbanSquare },
   { id: 'calendar', label: '日历', icon: CalendarDays },
   { id: 'gantt', label: '甘特', icon: GanttChartSquare },
+  { id: 'retrospective', label: '复盘', icon: ClipboardCheck },
 ];
 
 const DEFAULT_FILTERS = { assignee: 'all', priority: '', tagIds: [], statusIds: [], hideDone: false };
@@ -507,6 +510,14 @@ export default function ListPage({ listId, view, onViewChange }) {
           />
         )}
         {view === 'gantt' && <GanttView tasks={filteredTasks} onOpenTask={openTask} />}
+        {view === 'retrospective' && (
+          <RetrospectiveView
+            listId={list.id}
+            listName={list.name}
+            onOpenTask={openTask}
+            onCountChange={refresh}
+          />
+        )}
         {view === 'brainstorm' && (
           <BrainstormView
             listId={list.id}
@@ -523,6 +534,7 @@ export default function ListPage({ listId, view, onViewChange }) {
             list={list}
             tasks={data.tasks}
             milestones={data.milestones || []}
+            phases={data.phases || []}
             onChanged={refresh}
             onOpenTask={openTask}
             onSaveAsTemplate={() => {

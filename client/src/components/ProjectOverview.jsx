@@ -4,8 +4,8 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
-  Circle,
   Flag,
+  Layers,
   LayoutTemplate,
   Pencil,
   Plus,
@@ -18,6 +18,8 @@ import { api } from '../lib/api.js';
 import { addDays, dueTone, format, formatDateSmart, parseDateValue, todayKey, zhCN } from '../lib/date.js';
 import { ConfirmDialog, Modal, ProgressBar, Spinner } from './ui.jsx';
 
+const PHASE_COLORS = ['#7B68EE', '#4A9EFF', '#2EA44F', '#F59E0B', '#F06A6A', '#EC4899'];
+
 function emptyMilestoneForm(listColor) {
   return {
     id: null,
@@ -28,7 +30,32 @@ function emptyMilestoneForm(listColor) {
   };
 }
 
-export default function ProjectOverview({ list, tasks, milestones, onChanged, onOpenTask, onSaveAsTemplate }) {
+function emptyPhaseForm(listColor) {
+  return {
+    id: null,
+    name: '',
+    start_date: todayKey(),
+    end_date: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
+    color: listColor || PHASE_COLORS[0],
+  };
+}
+
+function daysInclusive(start, end) {
+  const startDate = parseDateValue(start);
+  const endDate = parseDateValue(end);
+  if (!startDate || !endDate) return 1;
+  return Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+}
+
+export default function ProjectOverview({
+  list,
+  tasks,
+  milestones,
+  phases = [],
+  onChanged,
+  onOpenTask,
+  onSaveAsTemplate,
+}) {
   const { toast } = useApp();
   const [editingPurpose, setEditingPurpose] = useState(false);
   const [purposeDraft, setPurposeDraft] = useState(list.purpose || '');
@@ -37,6 +64,10 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
   const [savingMilestone, setSavingMilestone] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [phaseForm, setPhaseForm] = useState(null);
+  const [savingPhase, setSavingPhase] = useState(false);
+  const [deletePhaseTarget, setDeletePhaseTarget] = useState(null);
+  const [deletingPhase, setDeletingPhase] = useState(false);
 
   useEffect(() => {
     setPurposeDraft(list.purpose || '');
@@ -74,6 +105,16 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
     [milestones]
   );
 
+  const sortedPhases = useMemo(
+    () =>
+      [...phases].sort((a, b) => {
+        const byStart = (a.start_date || '').localeCompare(b.start_date || '');
+        if (byStart !== 0) return byStart;
+        return (a.order_index || 0) - (b.order_index || 0);
+      }),
+    [phases]
+  );
+
   const upcomingTasks = useMemo(
     () =>
       tasks
@@ -82,6 +123,12 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
         .slice(0, 5),
     [tasks]
   );
+
+  function phaseForMilestone(milestone) {
+    return sortedPhases.find(
+      (phase) => phase.start_date <= milestone.due_date && phase.end_date >= milestone.due_date
+    );
+  }
 
   async function savePurpose() {
     setSavingPurpose(true);
@@ -158,6 +205,62 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
     }
   }
 
+  function openPhase(phase = null) {
+    setPhaseForm(
+      phase
+        ? {
+            id: phase.id,
+            name: phase.name,
+            start_date: phase.start_date,
+            end_date: phase.end_date,
+            color: phase.color || PHASE_COLORS[0],
+          }
+        : emptyPhaseForm(list.color)
+    );
+  }
+
+  async function savePhase(event) {
+    event.preventDefault();
+    if (!phaseForm?.name?.trim() || !phaseForm.start_date || !phaseForm.end_date) return;
+    if (phaseForm.end_date < phaseForm.start_date) {
+      toast('阶段结束日期不能早于开始日期', 'error');
+      return;
+    }
+    setSavingPhase(true);
+    try {
+      const payload = {
+        name: phaseForm.name.trim(),
+        start_date: phaseForm.start_date,
+        end_date: phaseForm.end_date,
+        color: phaseForm.color,
+      };
+      if (phaseForm.id) await api.patch(`/phases/${phaseForm.id}`, payload);
+      else await api.post(`/lists/${list.id}/phases`, payload);
+      setPhaseForm(null);
+      await onChanged();
+      toast(phaseForm.id ? '项目阶段已更新' : '项目阶段已添加');
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setSavingPhase(false);
+    }
+  }
+
+  async function removePhase() {
+    if (!deletePhaseTarget) return;
+    setDeletingPhase(true);
+    try {
+      await api.delete(`/phases/${deletePhaseTarget.id}`);
+      setDeletePhaseTarget(null);
+      await onChanged();
+      toast('项目阶段已删除');
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setDeletingPhase(false);
+    }
+  }
+
   return (
     <div className="project-overview">
       <section className="overview-hero">
@@ -215,6 +318,28 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
           </button>
         </div>
 
+        {sortedPhases.length > 0 && (
+          <div className="phase-band-scroll">
+            <div className="phase-band">
+              {sortedPhases.map((phase) => (
+                <div
+                  className="phase-block"
+                  key={phase.id}
+                  style={{
+                    flexGrow: daysInclusive(phase.start_date, phase.end_date),
+                    background: `${phase.color}14`,
+                    borderColor: `${phase.color}4d`,
+                  }}
+                >
+                  <span className="phase-block-dot" style={{ background: phase.color }} />
+                  <strong>{phase.name}</strong>
+                  <em>{formatDateSmart(phase.start_date)} — {formatDateSmart(phase.end_date)}</em>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {sortedMilestones.length ? (
           <div className="milestone-hscroll">
             <div className="milestone-hrow">
@@ -222,12 +347,16 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
                 const days = differenceInDays(milestone.due_date);
                 const overdue = !milestone.completed && days < 0;
                 const soon = !milestone.completed && days >= 0 && days <= 7;
+                const phase = phaseForMilestone(milestone);
                 return (
                   <div
                     className={`milestone-hitem ${milestone.completed ? 'is-completed' : ''} ${overdue ? 'is-overdue' : ''}`}
                     key={milestone.id}
                   >
-                    <div className="milestone-hcard">
+                    <div
+                      className="milestone-hcard"
+                      style={phase ? { borderTop: `3px solid ${phase.color}` } : undefined}
+                    >
                       <div className="milestone-hcard-top">
                         {milestone.completed ? (
                           <span className="milestone-badge is-done">已完成</span>
@@ -250,6 +379,7 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
                     <button
                       type="button"
                       className={`milestone-check ${milestone.completed ? 'is-checked' : ''}`}
+                      style={phase && !milestone.completed ? { borderColor: phase.color } : undefined}
                       onClick={() => toggleMilestone(milestone)}
                       title={milestone.completed ? '标记为未完成' : '标记为完成'}
                     >
@@ -258,6 +388,7 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
                     <div className="milestone-hlabel">
                       <strong>{formatDateSmart(milestone.due_date)}</strong>
                       <span>{format(parseDateValue(milestone.due_date), 'EEEEEE', { locale: zhCN })}</span>
+                      {phase && <em className="milestone-hphase" style={{ color: phase.color }}>{phase.name}</em>}
                     </div>
                   </div>
                 );
@@ -320,6 +451,44 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
               <span className="purpose-empty-action">开始填写 <ArrowUpRight size={13} /></span>
             </button>
           )}
+
+          <div className="phase-panorama">
+            <div className="phase-panorama-head">
+              <div>
+                <h4><Layers size={14} /> 项目全景</h4>
+                <p>用日期阶段串联项目，里程碑会按日期自动归入阶段并着色。</p>
+              </div>
+              <button type="button" className="section-action" onClick={() => openPhase()}>
+                <Plus size={13} /> 新增阶段
+              </button>
+            </div>
+            {sortedPhases.length ? (
+              <div className="phase-list">
+                {sortedPhases.map((phase) => (
+                  <div className="phase-row" key={phase.id}>
+                    <span className="phase-row-bar" style={{ background: phase.color }} />
+                    <div className="phase-row-main">
+                      <strong>{phase.name}</strong>
+                      <span>
+                        {formatDateSmart(phase.start_date)} — {formatDateSmart(phase.end_date)}
+                        <em>{daysInclusive(phase.start_date, phase.end_date)} 天</em>
+                      </span>
+                    </div>
+                    <div className="phase-row-actions">
+                      <button type="button" onClick={() => openPhase(phase)} title="编辑阶段"><Pencil size={12} /></button>
+                      <button type="button" className="is-danger" onClick={() => setDeletePhaseTarget(phase)} title="删除阶段"><Trash2 size={12} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <button type="button" className="phase-empty" onClick={() => openPhase()}>
+                <Layers size={15} />
+                <span>还没有阶段划分，例如：11月1日—12月15日「需求与设计」</span>
+                <span>添加阶段</span>
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="overview-card">
@@ -344,6 +513,91 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
           </div>
         </section>
       </div>
+
+      <Modal
+        open={Boolean(phaseForm)}
+        onClose={() => setPhaseForm(null)}
+        title={phaseForm?.id ? '编辑项目阶段' : '新增项目阶段'}
+        subtitle="定义时间范围，里程碑会按日期自动归入对应阶段"
+        width={480}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setPhaseForm(null)}>取消</button>
+            <button
+              type="submit"
+              form="phase-form"
+              className="btn btn-primary"
+              disabled={
+                savingPhase ||
+                !phaseForm?.name?.trim() ||
+                !phaseForm?.start_date ||
+                !phaseForm?.end_date ||
+                phaseForm.end_date < phaseForm.start_date
+              }
+            >
+              {savingPhase ? <Spinner size={15} /> : <Layers size={15} />} 保存阶段
+            </button>
+          </>
+        }
+      >
+        {phaseForm && (
+          <form id="phase-form" className="stack" onSubmit={savePhase}>
+            <label className="field">
+              <span className="field-label">阶段名称</span>
+              <input
+                className="input"
+                autoFocus
+                value={phaseForm.name}
+                onChange={(event) => setPhaseForm({ ...phaseForm, name: event.target.value })}
+                placeholder="例如：需求与设计"
+              />
+            </label>
+            <div className="form-grid-2">
+              <label className="field">
+                <span className="field-label">开始日期</span>
+                <input
+                  className="input"
+                  type="date"
+                  value={phaseForm.start_date}
+                  onChange={(event) => setPhaseForm({ ...phaseForm, start_date: event.target.value })}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">结束日期</span>
+                <input
+                  className="input"
+                  type="date"
+                  value={phaseForm.end_date}
+                  onChange={(event) => setPhaseForm({ ...phaseForm, end_date: event.target.value })}
+                  required
+                />
+              </label>
+            </div>
+            {phaseForm.end_date < phaseForm.start_date && (
+              <p className="form-error">结束日期不能早于开始日期。</p>
+            )}
+            <div className="field">
+              <span className="field-label">阶段颜色</span>
+              <div className="phase-color-picker">
+                {PHASE_COLORS.map((color) => (
+                  <button
+                    type="button"
+                    key={color}
+                    className={`phase-color-swatch ${phaseForm.color === color ? 'is-active' : ''}`}
+                    style={{ background: color }}
+                    onClick={() => setPhaseForm({ ...phaseForm, color })}
+                    title={color}
+                  />
+                ))}
+              </div>
+            </div>
+            <p className="phase-form-hint">
+              共 {daysInclusive(phaseForm.start_date, phaseForm.end_date)} 天。落在该日期范围内的里程碑会自动使用这个阶段的颜色。
+            </p>
+          </form>
+        )}
+      </Modal>
 
       <Modal
         open={Boolean(milestoneForm)}
@@ -403,6 +657,15 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
         busy={deleting}
         onClose={() => setDeleteTarget(null)}
         onConfirm={removeMilestone}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deletePhaseTarget)}
+        title="删除项目阶段"
+        message={`确定删除阶段「${deletePhaseTarget?.name || ''}」吗？里程碑不会被删除，只会失去阶段颜色。`}
+        busy={deletingPhase}
+        onClose={() => setDeletePhaseTarget(null)}
+        onConfirm={removePhase}
       />
     </div>
   );

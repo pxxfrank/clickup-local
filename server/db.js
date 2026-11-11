@@ -157,6 +157,48 @@ CREATE TABLE IF NOT EXISTS milestones (
   FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS project_phases (
+  id TEXT PRIMARY KEY,
+  list_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#7B68EE',
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS retrospectives (
+  id TEXT PRIMARY KEY,
+  list_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT DEFAULT '',
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS retrospective_tasks (
+  id TEXT PRIMARY KEY,
+  retrospective_id TEXT NOT NULL,
+  task_id TEXT,
+  name TEXT NOT NULL,
+  status_name TEXT,
+  status_color TEXT,
+  status_type TEXT,
+  assignee_name TEXT,
+  due_date TEXT,
+  completed_at TEXT,
+  event_date TEXT,
+  kind TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (retrospective_id) REFERENCES retrospectives(id) ON DELETE CASCADE,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS tags (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
@@ -286,6 +328,9 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_brainstorm_list ON brainstorm_items(list_id);
 CREATE INDEX IF NOT EXISTS idx_milestones_list ON milestones(list_id);
 CREATE INDEX IF NOT EXISTS idx_participants_task ON task_participants(task_id);
+CREATE INDEX IF NOT EXISTS idx_phases_list ON project_phases(list_id);
+CREATE INDEX IF NOT EXISTS idx_retrospectives_list ON retrospectives(list_id);
+CREATE INDEX IF NOT EXISTS idx_retrospective_tasks ON retrospective_tasks(retrospective_id);
 CREATE INDEX IF NOT EXISTS idx_templates_workspace ON project_templates(workspace_id);
 `;
 

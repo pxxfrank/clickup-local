@@ -3,8 +3,10 @@ import {
   AtSign,
   Bell,
   CheckCheck,
+  ClipboardCheck,
   FileText,
   Flag,
+  Layers,
   LayoutTemplate,
   Lightbulb,
   ListPlus,
@@ -39,6 +41,8 @@ const TYPE_META = {
   template_created: { icon: LayoutTemplate, color: '#7B68EE', label: '模板' },
   brainstorm_committed: { icon: Lightbulb, color: '#F2A93B', label: '头脑风暴' },
   milestone_created: { icon: Flag, color: '#2EA44F', label: '里程碑' },
+  phase_created: { icon: Layers, color: '#4A9EFF', label: '项目阶段' },
+  retrospective_created: { icon: ClipboardCheck, color: '#7B68EE', label: '复盘' },
 };
 
 const FILTERS = [

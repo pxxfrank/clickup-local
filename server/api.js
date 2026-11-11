@@ -59,6 +59,16 @@ function dateFromDayOffset(offset) {
   return todayStr(Number(offset));
 }
 
+function localDateKey(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function buildTemplateSnapshot(listId) {
   const db = getDb();
   const list = db
@@ -139,6 +149,16 @@ function buildTemplateSnapshot(listId) {
       color: milestone.color,
       order_index: milestone.order_index,
     }));
+  const phases = db
+    .prepare('SELECT * FROM project_phases WHERE list_id = ? ORDER BY start_date, order_index')
+    .all(listId)
+    .map((phase) => ({
+      name: phase.name,
+      start_offset: dayOffsetFromToday(phase.start_date),
+      end_offset: dayOffsetFromToday(phase.end_date),
+      color: phase.color,
+      order_index: phase.order_index,
+    }));
   return {
     source_list: { name: list.name, icon: list.icon, color: list.color },
     list: {
@@ -157,6 +177,7 @@ function buildTemplateSnapshot(listId) {
     fields,
     tasks,
     milestones,
+    phases,
   };
 }
 
@@ -173,6 +194,67 @@ function accessibleList(listId, userId) {
        WHERE l.id = ?`
     )
     .get(userId, listId);
+}
+
+function accessibleRetrospective(retrospectiveId, userId) {
+  return getDb()
+    .prepare(
+      `SELECT r.*, l.name AS list_name, s.workspace_id
+       FROM retrospectives r
+       JOIN lists l ON l.id = r.list_id
+       JOIN spaces s ON s.id = l.space_id
+       JOIN workspace_members m ON m.workspace_id = s.workspace_id AND m.user_id = ?
+       WHERE r.id = ?`
+    )
+    .get(userId, retrospectiveId);
+}
+
+function snapshotRetrospectiveTasks(db, listId, retrospectiveId, now) {
+  const today = todayStr();
+  const rows = db
+    .prepare(
+      `SELECT t.id, t.name, t.due_date, t.completed_at, t.updated_at,
+              st.name AS status_name, st.color AS status_color, st.type AS status_type,
+              u.name AS assignee_name
+       FROM tasks t
+       LEFT JOIN statuses st ON st.id = t.status_id
+       LEFT JOIN users u ON u.id = t.assignee_id
+       WHERE t.list_id = ? AND t.archived = 0
+       ORDER BY t.due_date, t.created_at`
+    )
+    .all(listId);
+  const insert = db.prepare(
+    `INSERT INTO retrospective_tasks
+     (id, retrospective_id, task_id, name, status_name, status_color, status_type, assignee_name,
+      due_date, completed_at, event_date, kind, created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  );
+  let count = 0;
+  for (const task of rows) {
+    const completed = ['done', 'closed'].includes(task.status_type);
+    const overdue = !completed && task.due_date && task.due_date < today;
+    if (!completed && !overdue) continue;
+    const eventDate = completed
+      ? localDateKey(task.completed_at) || task.due_date || localDateKey(task.updated_at) || null
+      : task.due_date;
+    insert.run(
+      randomId(),
+      retrospectiveId,
+      task.id,
+      task.name,
+      task.status_name || null,
+      task.status_color || null,
+      task.status_type || null,
+      task.assignee_name || null,
+      task.due_date || null,
+      task.completed_at || null,
+      eventDate,
+      completed ? 'completed' : 'overdue',
+      now
+    );
+    count += 1;
+  }
+  return count;
 }
 
 function accessibleTask(taskId, userId) {
@@ -505,7 +587,22 @@ export function createApiRouter() {
     const brainstormCount = db
       .prepare('SELECT COUNT(*) AS c FROM brainstorm_items WHERE list_id = ?')
       .get(list.id).c;
-    res.json({ list, statuses, fields, tasks, milestones, brainstorm_count: brainstormCount });
+    const phases = db
+      .prepare('SELECT * FROM project_phases WHERE list_id = ? ORDER BY start_date, order_index, created_at')
+      .all(list.id);
+    const retrospectiveCount = db
+      .prepare('SELECT COUNT(*) AS c FROM retrospectives WHERE list_id = ?')
+      .get(list.id).c;
+    res.json({
+      list,
+      statuses,
+      fields,
+      tasks,
+      milestones,
+      phases,
+      brainstorm_count: brainstormCount,
+      retrospective_count: retrospectiveCount,
+    });
   });
 
   router.post('/tasks', (req, res) => {
@@ -938,7 +1035,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.2.0',
+      version: '1.3.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -1530,6 +1627,145 @@ export function createApiRouter() {
     res.json({ ok: true, created: items.length, status: target });
   });
 
+  router.post('/lists/:id/phases', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: '阶段名称不能为空' });
+    const startDate = String(req.body?.start_date || '').trim();
+    const endDate = String(req.body?.end_date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return res.status(400).json({ error: '请选择阶段的开始和结束日期' });
+    }
+    if (endDate < startDate) return res.status(400).json({ error: '阶段结束日期不能早于开始日期' });
+    const maxOrder = db.prepare('SELECT COALESCE(MAX(order_index), 0) AS max FROM project_phases WHERE list_id = ?').get(list.id).max;
+    const id = randomId();
+    const now = new Date().toISOString();
+    db.prepare(
+      'INSERT INTO project_phases (id, list_id, name, start_date, end_date, color, order_index, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)'
+    ).run(id, list.id, name, startDate, endDate, req.body?.color || list.color || '#7B68EE', maxOrder + 1, now, now);
+    logActivity(list.workspace_id, null, req.user.id, 'phase_created', `在「${list.name}」中新增项目阶段「${name}」`);
+    res.status(201).json(db.prepare('SELECT * FROM project_phases WHERE id = ?').get(id));
+  });
+
+  router.patch('/phases/:id', (req, res) => {
+    const phase = db
+      .prepare(
+        `SELECT p.*, s.workspace_id FROM project_phases p JOIN lists l ON l.id = p.list_id
+         JOIN spaces s ON s.id = l.space_id JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = ?
+         WHERE p.id = ?`
+      )
+      .get(req.user.id, req.params.id);
+    if (!phase) return res.status(404).json({ error: '项目阶段不存在' });
+    const name = req.body?.name !== undefined ? String(req.body.name).trim() || phase.name : phase.name;
+    const startDate = req.body?.start_date !== undefined ? String(req.body.start_date) : phase.start_date;
+    const endDate = req.body?.end_date !== undefined ? String(req.body.end_date) : phase.end_date;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return res.status(400).json({ error: '阶段日期无效' });
+    }
+    if (endDate < startDate) return res.status(400).json({ error: '阶段结束日期不能早于开始日期' });
+    db.prepare(
+      'UPDATE project_phases SET name = ?, start_date = ?, end_date = ?, color = ?, updated_at = ? WHERE id = ?'
+    ).run(
+      name,
+      startDate,
+      endDate,
+      req.body?.color || phase.color,
+      new Date().toISOString(),
+      phase.id
+    );
+    res.json(db.prepare('SELECT * FROM project_phases WHERE id = ?').get(phase.id));
+  });
+
+  router.delete('/phases/:id', (req, res) => {
+    const phase = db
+      .prepare(
+        `SELECT p.*, s.workspace_id FROM project_phases p JOIN lists l ON l.id = p.list_id
+         JOIN spaces s ON s.id = l.space_id JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = ?
+         WHERE p.id = ?`
+      )
+      .get(req.user.id, req.params.id);
+    if (!phase) return res.status(404).json({ error: '项目阶段不存在' });
+    db.prepare('DELETE FROM project_phases WHERE id = ?').run(phase.id);
+    res.json({ ok: true });
+  });
+
+  router.get('/lists/:id/retrospectives', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const retrospectives = db
+      .prepare(
+        `SELECT r.*, u.name AS creator_name,
+                (SELECT COUNT(*) FROM retrospective_tasks rt WHERE rt.retrospective_id = r.id) AS task_count,
+                (SELECT COUNT(*) FROM retrospective_tasks rt WHERE rt.retrospective_id = r.id AND rt.kind = 'completed') AS completed_count,
+                (SELECT COUNT(*) FROM retrospective_tasks rt WHERE rt.retrospective_id = r.id AND rt.kind = 'overdue') AS overdue_count
+         FROM retrospectives r LEFT JOIN users u ON u.id = r.created_by
+         WHERE r.list_id = ? ORDER BY r.created_at DESC`
+      )
+      .all(list.id);
+    res.json({ retrospectives });
+  });
+
+  router.post('/lists/:id/retrospectives', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const existing = db.prepare('SELECT COUNT(*) AS c FROM retrospectives WHERE list_id = ?').get(list.id).c;
+    const title =
+      String(req.body?.title || '').trim() || `第 ${existing + 1} 次复盘 · ${todayStr()}`;
+    const content = String(req.body?.content || '');
+    const id = randomId();
+    const now = new Date().toISOString();
+    db.exec('BEGIN');
+    let taskCount = 0;
+    try {
+      db.prepare(
+        'INSERT INTO retrospectives (id, list_id, title, content, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?)'
+      ).run(id, list.id, title, content, req.user.id, now, now);
+      taskCount = snapshotRetrospectiveTasks(db, list.id, id, now);
+      logActivity(list.workspace_id, null, req.user.id, 'retrospective_created', `在「${list.name}」中发起复盘「${title}」`);
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+    const retrospective = db.prepare('SELECT * FROM retrospectives WHERE id = ?').get(id);
+    const tasks = db
+      .prepare('SELECT * FROM retrospective_tasks WHERE retrospective_id = ? ORDER BY event_date IS NULL, event_date, kind')
+      .all(id);
+    res.status(201).json({ ...retrospective, tasks, task_count: taskCount });
+  });
+
+  router.get('/retrospectives/:id', (req, res) => {
+    const retrospective = accessibleRetrospective(req.params.id, req.user.id);
+    if (!retrospective) return res.status(404).json({ error: '复盘不存在' });
+    const tasks = db
+      .prepare('SELECT * FROM retrospective_tasks WHERE retrospective_id = ? ORDER BY event_date IS NULL, event_date, kind')
+      .all(retrospective.id);
+    res.json({ ...retrospective, tasks });
+  });
+
+  router.patch('/retrospectives/:id', (req, res) => {
+    const retrospective = accessibleRetrospective(req.params.id, req.user.id);
+    if (!retrospective) return res.status(404).json({ error: '复盘不存在' });
+    const title =
+      req.body?.title !== undefined ? String(req.body.title).trim() || retrospective.title : retrospective.title;
+    const content = req.body?.content !== undefined ? String(req.body.content) : retrospective.content;
+    db.prepare('UPDATE retrospectives SET title = ?, content = ?, updated_at = ? WHERE id = ?').run(
+      title,
+      content,
+      new Date().toISOString(),
+      retrospective.id
+    );
+    res.json(db.prepare('SELECT * FROM retrospectives WHERE id = ?').get(retrospective.id));
+  });
+
+  router.delete('/retrospectives/:id', (req, res) => {
+    const retrospective = accessibleRetrospective(req.params.id, req.user.id);
+    if (!retrospective) return res.status(404).json({ error: '复盘不存在' });
+    db.prepare('DELETE FROM retrospectives WHERE id = ?').run(retrospective.id);
+    res.json({ ok: true });
+  });
+
   router.post('/lists/:id/milestones', (req, res) => {
     const list = accessibleList(req.params.id, req.user.id);
     if (!list) return res.status(404).json({ error: '列表不存在' });
@@ -1651,6 +1887,7 @@ export function createApiRouter() {
     const fields = Array.isArray(data.fields) ? data.fields : [];
     const taskTemplates = Array.isArray(data.tasks) ? data.tasks : [];
     const milestones = Array.isArray(data.milestones) ? data.milestones : [];
+    const phases = Array.isArray(data.phases) ? data.phases : [];
     db.exec('BEGIN');
     try {
       const count = db.prepare('SELECT COUNT(*) AS c FROM lists WHERE space_id = ?').get(space.id).c;
@@ -1809,6 +2046,22 @@ export function createApiRouter() {
         );
       });
 
+      phases.forEach((phase, index) => {
+        db.prepare(
+          'INSERT INTO project_phases (id, list_id, name, start_date, end_date, color, order_index, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)'
+        ).run(
+          randomId(),
+          listId,
+          phase.name || '项目阶段',
+          dateFromDayOffset(phase.start_offset) || todayStr(0),
+          dateFromDayOffset(phase.end_offset) || todayStr(30),
+          phase.color || template.color || '#7B68EE',
+          phase.order_index ?? index,
+          now,
+          now
+        );
+      });
+
       logActivity(template.workspace_id, null, req.user.id, 'list_created', `从模板「${template.name}」创建了项目「${projectName}」`);
       db.exec('COMMIT');
     } catch (error) {
@@ -1819,6 +2072,7 @@ export function createApiRouter() {
       list: accessibleList(listId, req.user.id),
       task_count: taskTemplates.length,
       milestone_count: milestones.length,
+      phase_count: phases.length,
     });
   });
 
