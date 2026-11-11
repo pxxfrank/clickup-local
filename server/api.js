@@ -107,6 +107,10 @@ function buildTemplateSnapshot(listId) {
       .all(task.id);
     const fieldValueMap = {};
     for (const value of fieldValues) fieldValueMap[value.name] = value.value;
+    const participantIds = db
+      .prepare('SELECT user_id FROM task_participants WHERE task_id = ?')
+      .all(task.id)
+      .map((row) => row.user_id);
     return {
       index,
       parent_index: task.parent_id ? indexByTaskId.get(task.parent_id) ?? null : null,
@@ -121,6 +125,7 @@ function buildTemplateSnapshot(listId) {
       tags: tagRows,
       checklists: checklistData,
       field_values: fieldValueMap,
+      participant_ids: participantIds,
     };
   });
   const milestones = db
@@ -204,6 +209,7 @@ function shapeTask(row) {
     tags: [],
     subtask_count: row.subtask_count || 0,
     comment_count: row.comment_count || 0,
+    participant_count: row.participant_count || 0,
     checklist_total: row.checklist_total || 0,
     checklist_done: row.checklist_done || 0,
   };
@@ -236,6 +242,7 @@ function taskQuery(whereClause, orderClause = 't.order_index ASC') {
                  st.name AS status_name, st.color AS status_color, st.type AS status_type,
                  (SELECT COUNT(*) FROM tasks c WHERE c.parent_id = t.id) AS subtask_count,
                  (SELECT COUNT(*) FROM comments cm WHERE cm.task_id = t.id) AS comment_count,
+                 (SELECT COUNT(*) FROM task_participants tp WHERE tp.task_id = t.id) AS participant_count,
                  (SELECT COUNT(*) FROM checklists cl JOIN checklist_items ci ON ci.checklist_id = cl.id WHERE cl.task_id = t.id) AS checklist_total,
                  (SELECT COALESCE(SUM(ci.done), 0) FROM checklists cl JOIN checklist_items ci ON ci.checklist_id = cl.id WHERE cl.task_id = t.id) AS checklist_done
           FROM tasks t
@@ -255,6 +262,7 @@ function loadTaskDetail(taskId, userId) {
               st.name AS status_name, st.color AS status_color, st.type AS status_type,
               (SELECT COUNT(*) FROM tasks c WHERE c.parent_id = t.id) AS subtask_count,
               (SELECT COUNT(*) FROM comments cm WHERE cm.task_id = t.id) AS comment_count,
+              (SELECT COUNT(*) FROM task_participants tp WHERE tp.task_id = t.id) AS participant_count,
               (SELECT COUNT(*) FROM checklists cl JOIN checklist_items ci ON ci.checklist_id = cl.id WHERE cl.task_id = t.id) AS checklist_total,
               (SELECT COALESCE(SUM(ci.done), 0) FROM checklists cl JOIN checklist_items ci ON ci.checklist_id = cl.id WHERE cl.task_id = t.id) AS checklist_done
        FROM tasks t
@@ -308,10 +316,24 @@ function loadTaskDetail(taskId, userId) {
   const statuses = db
     .prepare('SELECT * FROM statuses WHERE list_id = ? ORDER BY order_index, rowid')
     .all(shaped.list_id);
+  const contactIds = new Set(
+    db
+      .prepare('SELECT user_id FROM workspace_contacts WHERE workspace_id = ?')
+      .all(task.workspace_id)
+      .map((row) => row.user_id)
+  );
+  const participants = db
+    .prepare(
+      `SELECT u.id, u.name, u.color, u.title, tp.created_at FROM task_participants tp
+       JOIN users u ON u.id = tp.user_id WHERE tp.task_id = ? ORDER BY tp.created_at, u.name`
+    )
+    .all(taskId)
+    .map((participant) => ({ ...participant, is_external: contactIds.has(participant.id) }));
   return {
     ...shaped,
     tags,
     statuses,
+    participants,
     list: {
       id: task.list_id,
       name: task.list_name,
@@ -536,6 +558,16 @@ export function createApiRouter() {
       const tag = db.prepare('SELECT id FROM tags WHERE id = ? AND workspace_id = ?').get(tagId, list.workspace_id);
       if (tag) db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(id, tag.id);
     }
+    const participantIds = Array.isArray(body.participant_ids) ? body.participant_ids : [];
+    for (const participantId of participantIds) {
+      if (isAssignable(list.workspace_id, participantId)) {
+        db.prepare('INSERT OR IGNORE INTO task_participants (task_id, user_id, created_at) VALUES (?,?,?)').run(
+          id,
+          participantId,
+          now
+        );
+      }
+    }
     logActivity(list.workspace_id, id, req.user.id, 'task_created', `创建了任务「${name}」`);
     res.status(201).json(loadTaskDetail(id, req.user.id));
   });
@@ -613,6 +645,16 @@ export function createApiRouter() {
       for (const tagId of body.tag_ids) {
         const tag = dbAny.prepare('SELECT id FROM tags WHERE id = ? AND workspace_id = ?').get(tagId, existing.workspace_id);
         if (tag) dbAny.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(existing.id, tag.id);
+      }
+    }
+    if (Array.isArray(body.participant_ids)) {
+      dbAny.prepare('DELETE FROM task_participants WHERE task_id = ?').run(existing.id);
+      const now = new Date().toISOString();
+      for (const participantId of body.participant_ids) {
+        if (!isAssignable(existing.workspace_id, participantId)) continue;
+        dbAny
+          .prepare('INSERT OR IGNORE INTO task_participants (task_id, user_id, created_at) VALUES (?,?,?)')
+          .run(existing.id, participantId, now);
       }
     }
     if (body.fields && typeof body.fields === 'object') {
@@ -896,7 +938,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.1.0',
+      version: '1.2.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -929,6 +971,7 @@ export function createApiRouter() {
                 l.name AS list_name, l.color AS list_color, f.name AS folder_name, sp.name AS space_name,
                 (SELECT COUNT(*) FROM tasks c WHERE c.parent_id = t.id) AS subtask_count,
                 (SELECT COUNT(*) FROM comments cm WHERE cm.task_id = t.id) AS comment_count,
+                (SELECT COUNT(*) FROM task_participants tp WHERE tp.task_id = t.id) AS participant_count,
                 (SELECT COUNT(*) FROM checklists cl JOIN checklist_items ci ON ci.checklist_id = cl.id WHERE cl.task_id = t.id) AS checklist_total,
                 (SELECT COALESCE(SUM(ci.done), 0) FROM checklists cl JOIN checklist_items ci ON ci.checklist_id = cl.id WHERE cl.task_id = t.id) AS checklist_done
          FROM tasks t JOIN lists l ON l.id = t.list_id JOIN spaces sp ON sp.id = l.space_id
@@ -1712,6 +1755,15 @@ export function createApiRouter() {
           const tagId = ensureTag(tag.name, tag.color);
           if (tagId) db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(taskId, tagId);
         }
+        for (const participantId of Array.isArray(task.participant_ids) ? task.participant_ids : []) {
+          if (isAssignable(template.workspace_id, participantId)) {
+            db.prepare('INSERT OR IGNORE INTO task_participants (task_id, user_id, created_at) VALUES (?,?,?)').run(
+              taskId,
+              participantId,
+              now
+            );
+          }
+        }
         if (task.field_values && typeof task.field_values === 'object') {
           for (const [fieldName, value] of Object.entries(task.field_values)) {
             const fieldId = fieldMap.get(fieldName);
@@ -1847,6 +1899,13 @@ export function createApiRouter() {
       `UPDATE tasks SET assignee_id = NULL
        WHERE assignee_id = ? AND list_id IN (
          SELECT l.id FROM lists l JOIN spaces s ON s.id = l.space_id WHERE s.workspace_id = ?
+       )`
+    ).run(userId, workspaceId);
+    db.prepare(
+      `DELETE FROM task_participants
+       WHERE user_id = ? AND task_id IN (
+         SELECT t.id FROM tasks t JOIN lists l ON l.id = t.list_id JOIN spaces s ON s.id = l.space_id
+         WHERE s.workspace_id = ?
        )`
     ).run(userId, workspaceId);
     res.json({ ok: true });

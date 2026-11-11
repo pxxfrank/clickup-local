@@ -33,7 +33,7 @@ ShowInstDetails hide
 ShowUninstDetails hide
 BrandingText "${APP_NAME} · 数据保存在本机"
 
-VIProductVersion "1.1.0.0"
+VIProductVersion "1.2.0.0"
 VIAddVersionKey "ProductName" "${APP_NAME}"
 VIAddVersionKey "FileDescription" "${APP_NAME} 安装程序"
 VIAddVersionKey "FileVersion" "${APP_VERSION}"

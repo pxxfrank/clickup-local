@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Plus,
   UserRound,
+  Users,
 } from 'lucide-react';
 import {
   Avatar,
@@ -231,10 +232,13 @@ function TaskRow({ task, statuses, members, onOpen, onComplete, onUpdate, showSt
             <TagChip key={tag.id} tag={tag} small />
           ))}
         </div>
-        {(task.subtask_count > 0 || task.comment_count > 0 || task.checklist_total > 0) && (
+        {(task.subtask_count > 0 || task.comment_count > 0 || task.checklist_total > 0 || task.participant_count > 0) && (
           <div className="task-subline">
             {task.subtask_count > 0 && (
               <span><ListTree size={12} /> {task.subtask_count} 个子任务</span>
+            )}
+            {task.participant_count > 0 && (
+              <span><Users size={12} /> {task.participant_count} 位参与人</span>
             )}
             {task.comment_count > 0 && (
               <span><MessageSquare size={12} /> {task.comment_count}</span>

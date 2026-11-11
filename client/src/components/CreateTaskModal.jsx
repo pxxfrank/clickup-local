@@ -77,7 +77,7 @@ export default function CreateTaskModal({ defaults, onClose }) {
       });
       toast('任务已创建');
       await refresh();
-      navigate(`/list/${listId}`);
+      navigate(`/list/${listId}?view=list`);
       openTask(created.id);
       onClose();
     } catch (error) {

@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
-import { addDays, dueTone, format, formatDateSmart, parseDateValue, todayKey } from '../lib/date.js';
+import { addDays, dueTone, format, formatDateSmart, parseDateValue, todayKey, zhCN } from '../lib/date.js';
 import { ConfirmDialog, Modal, ProgressBar, Spinner } from './ui.jsx';
 
 function emptyMilestoneForm(listColor) {
@@ -204,147 +204,144 @@ export default function ProjectOverview({ list, tasks, milestones, onChanged, on
         </div>
       </section>
 
-      <div className="overview-grid">
-        <div className="overview-left">
-          <section className="overview-card overview-purpose-card">
-            <div className="overview-card-head">
-              <div>
-                <h3>项目背景与目的</h3>
-                <p>说明为什么要做这个项目、希望达成什么结果。</p>
-              </div>
-              {!editingPurpose && (
-                <button type="button" className="section-action" onClick={() => setEditingPurpose(true)}>
-                  <Pencil size={13} /> 编辑
-                </button>
-              )}
-            </div>
-            {editingPurpose ? (
-              <div className="purpose-editor">
-                <textarea
-                  className="description-textarea"
-                  autoFocus
-                  rows={6}
-                  value={purposeDraft}
-                  onChange={(event) => setPurposeDraft(event.target.value)}
-                  placeholder="例如：本项目的目标是……，希望解决……，成功标准是……"
-                />
-                <div className="description-editor-foot">
-                  <span>会展示在项目概览和模板中</span>
-                  <div>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setEditingPurpose(false); setPurposeDraft(list.purpose || ''); }}>
-                      取消
-                    </button>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={savePurpose} disabled={savingPurpose}>
-                      {savingPurpose && <Spinner size={13} />} 保存
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : list.purpose ? (
-              <div className="purpose-content" onClick={() => setEditingPurpose(true)}>{list.purpose}</div>
-            ) : (
-              <button type="button" className="purpose-empty" onClick={() => setEditingPurpose(true)}>
-                <Sparkles size={17} />
-                <span>添加项目背景与目的，让团队知道为什么做这件事。</span>
-                <span className="purpose-empty-action">开始填写 <ArrowUpRight size={13} /></span>
-              </button>
-            )}
-          </section>
-
-          <section className="overview-card">
-            <div className="overview-card-head">
-              <div>
-                <h3>近期任务</h3>
-                <p>按截止日期排序的未完成任务</p>
-              </div>
-              <span className="overview-mini-count">{upcomingTasks.length}</span>
-            </div>
-            <div className="overview-task-list">
-              {upcomingTasks.map((task) => (
-                <button type="button" key={task.id} className="overview-task-row" onClick={() => onOpenTask(task.id)}>
-                  <span className={`overview-task-dot ${dueTone(task.due_date, task.status?.type)}`} />
-                  <span className="overview-task-name">{task.name}</span>
-                  <span className={`overview-task-date ${dueTone(task.due_date, task.status?.type)}`}>
-                    {task.due_date ? formatDateSmart(task.due_date) : '无日期'}
-                  </span>
-                </button>
-              ))}
-              {!upcomingTasks.length && <p className="overview-empty-text">没有待完成任务。</p>}
-            </div>
-          </section>
+      <section className="overview-card overview-timeline-card overview-timeline-full">
+        <div className="overview-card-head">
+          <div>
+            <h3>里程碑时间轴</h3>
+            <p>横向查看项目的关键节点，左右滑动浏览更多</p>
+          </div>
+          <button type="button" className="section-action" onClick={() => openMilestone()}>
+            <Plus size={13} /> 新增
+          </button>
         </div>
 
-        <section className="overview-card overview-timeline-card">
-          <div className="overview-card-head">
-            <div>
-              <h3>里程碑时间轴</h3>
-              <p>按时间顺序查看项目的关键节点</p>
-            </div>
-            <button type="button" className="section-action" onClick={() => openMilestone()}>
-              <Plus size={13} /> 新增
-            </button>
-          </div>
-
-          {sortedMilestones.length ? (
-            <div className="milestone-timeline">
-              {sortedMilestones.map((milestone, index) => {
+        {sortedMilestones.length ? (
+          <div className="milestone-hscroll">
+            <div className="milestone-hrow">
+              {sortedMilestones.map((milestone) => {
                 const days = differenceInDays(milestone.due_date);
                 const overdue = !milestone.completed && days < 0;
                 const soon = !milestone.completed && days >= 0 && days <= 7;
                 return (
                   <div
-                    className={`milestone-item ${milestone.completed ? 'is-completed' : ''} ${overdue ? 'is-overdue' : ''}`}
+                    className={`milestone-hitem ${milestone.completed ? 'is-completed' : ''} ${overdue ? 'is-overdue' : ''}`}
                     key={milestone.id}
                   >
-                    <div className="milestone-rail">
-                      <button
-                        type="button"
-                        className={`milestone-check ${milestone.completed ? 'is-checked' : ''}`}
-                        onClick={() => toggleMilestone(milestone)}
-                        title={milestone.completed ? '标记为未完成' : '标记为完成'}
-                      >
-                        {milestone.completed ? <Check size={11} /> : null}
-                      </button>
-                      {index < sortedMilestones.length - 1 && <span className="milestone-line" />}
-                    </div>
-                    <div className="milestone-body">
-                      <div className="milestone-head">
-                        <div className="milestone-title-group">
-                          <span className="milestone-date">{formatDateSmart(milestone.due_date)}</span>
-                          <h4>{milestone.name}</h4>
-                        </div>
-                        <div className="milestone-tags">
-                          {milestone.completed ? (
-                            <span className="milestone-badge is-done">已完成</span>
-                          ) : overdue ? (
-                            <span className="milestone-badge is-overdue">逾期 {Math.abs(days)} 天</span>
-                          ) : soon ? (
-                            <span className="milestone-badge is-soon">{days === 0 ? '今天' : `${days} 天后`}</span>
-                          ) : (
-                            <span className="milestone-badge">{days} 天后</span>
-                          )}
+                    <div className="milestone-hcard">
+                      <div className="milestone-hcard-top">
+                        {milestone.completed ? (
+                          <span className="milestone-badge is-done">已完成</span>
+                        ) : overdue ? (
+                          <span className="milestone-badge is-overdue">逾期 {Math.abs(days)} 天</span>
+                        ) : soon ? (
+                          <span className="milestone-badge is-soon">{days === 0 ? '今天' : `${days} 天后`}</span>
+                        ) : (
+                          <span className="milestone-badge">{days} 天后</span>
+                        )}
+                        <div className="milestone-actions">
+                          <button type="button" onClick={() => openMilestone(milestone)}><Pencil size={12} /> 编辑</button>
+                          <button type="button" className="is-danger" onClick={() => setDeleteTarget(milestone)}><Trash2 size={12} /> 删除</button>
                         </div>
                       </div>
+                      <h4>{milestone.name}</h4>
                       {milestone.description && <p className="milestone-desc">{milestone.description}</p>}
-                      <div className="milestone-actions">
-                        <button type="button" onClick={() => openMilestone(milestone)}><Pencil size={12} /> 编辑</button>
-                        <button type="button" className="is-danger" onClick={() => setDeleteTarget(milestone)}><Trash2 size={12} /> 删除</button>
-                      </div>
+                    </div>
+                    <span className="milestone-hstem" />
+                    <button
+                      type="button"
+                      className={`milestone-check ${milestone.completed ? 'is-checked' : ''}`}
+                      onClick={() => toggleMilestone(milestone)}
+                      title={milestone.completed ? '标记为未完成' : '标记为完成'}
+                    >
+                      {milestone.completed ? <Check size={11} /> : null}
+                    </button>
+                    <div className="milestone-hlabel">
+                      <strong>{formatDateSmart(milestone.due_date)}</strong>
+                      <span>{format(parseDateValue(milestone.due_date), 'EEEEEE', { locale: zhCN })}</span>
                     </div>
                   </div>
                 );
               })}
             </div>
-          ) : (
-            <div className="milestone-empty">
-              <div className="milestone-empty-icon"><Flag size={24} /></div>
-              <h4>还没有里程碑</h4>
-              <p>把项目拆成几个关键节点，时间轴会让你更清楚下一步。</p>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => openMilestone()}>
-                <Plus size={14} /> 添加第一个里程碑
-              </button>
+          </div>
+        ) : (
+          <div className="milestone-empty milestone-empty-horizontal">
+            <div className="milestone-empty-icon"><Flag size={24} /></div>
+            <h4>还没有里程碑</h4>
+            <p>把项目拆成几个关键节点，横向时间轴会让你更清楚下一步。</p>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => openMilestone()}>
+              <Plus size={14} /> 添加第一个里程碑
+            </button>
+          </div>
+        )}
+      </section>
+
+      <div className="overview-grid">
+        <section className="overview-card overview-purpose-card">
+          <div className="overview-card-head">
+            <div>
+              <h3>项目背景与目的</h3>
+              <p>说明为什么要做这个项目、希望达成什么结果。</p>
             </div>
+            {!editingPurpose && (
+              <button type="button" className="section-action" onClick={() => setEditingPurpose(true)}>
+                <Pencil size={13} /> 编辑
+              </button>
+            )}
+          </div>
+          {editingPurpose ? (
+            <div className="purpose-editor">
+              <textarea
+                className="description-textarea"
+                autoFocus
+                rows={6}
+                value={purposeDraft}
+                onChange={(event) => setPurposeDraft(event.target.value)}
+                placeholder="例如：本项目的目标是……，希望解决……，成功标准是……"
+              />
+              <div className="description-editor-foot">
+                <span>会展示在项目概览和模板中</span>
+                <div>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setEditingPurpose(false); setPurposeDraft(list.purpose || ''); }}>
+                    取消
+                  </button>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={savePurpose} disabled={savingPurpose}>
+                    {savingPurpose && <Spinner size={13} />} 保存
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : list.purpose ? (
+            <div className="purpose-content" onClick={() => setEditingPurpose(true)}>{list.purpose}</div>
+          ) : (
+            <button type="button" className="purpose-empty" onClick={() => setEditingPurpose(true)}>
+              <Sparkles size={17} />
+              <span>添加项目背景与目的，让团队知道为什么做这件事。</span>
+              <span className="purpose-empty-action">开始填写 <ArrowUpRight size={13} /></span>
+            </button>
           )}
+        </section>
+
+        <section className="overview-card">
+          <div className="overview-card-head">
+            <div>
+              <h3>近期任务</h3>
+              <p>按截止日期排序的未完成任务</p>
+            </div>
+            <span className="overview-mini-count">{upcomingTasks.length}</span>
+          </div>
+          <div className="overview-task-list">
+            {upcomingTasks.map((task) => (
+              <button type="button" key={task.id} className="overview-task-row" onClick={() => onOpenTask(task.id)}>
+                <span className={`overview-task-dot ${dueTone(task.due_date, task.status?.type)}`} />
+                <span className="overview-task-name">{task.name}</span>
+                <span className={`overview-task-date ${dueTone(task.due_date, task.status?.type)}`}>
+                  {task.due_date ? formatDateSmart(task.due_date) : '无日期'}
+                </span>
+              </button>
+            ))}
+            {!upcomingTasks.length && <p className="overview-empty-text">没有待完成任务。</p>}
+          </div>
         </section>
       </div>
 

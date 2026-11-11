@@ -173,6 +173,15 @@ CREATE TABLE IF NOT EXISTS task_tags (
   FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS task_participants (
+  task_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (task_id, user_id),
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS checklists (
   id TEXT PRIMARY KEY,
   task_id TEXT NOT NULL,
@@ -276,6 +285,7 @@ CREATE INDEX IF NOT EXISTS idx_activity_workspace ON activity(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_brainstorm_list ON brainstorm_items(list_id);
 CREATE INDEX IF NOT EXISTS idx_milestones_list ON milestones(list_id);
+CREATE INDEX IF NOT EXISTS idx_participants_task ON task_participants(task_id);
 CREATE INDEX IF NOT EXISTS idx_templates_workspace ON project_templates(workspace_id);
 `;
 

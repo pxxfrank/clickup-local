@@ -40,12 +40,12 @@ import ProjectOverview from './ProjectOverview.jsx';
 import ListSettingsModal from './ListSettingsModal.jsx';
 
 const VIEWS = [
-  { id: 'list', label: '列表', icon: ListIcon },
+  { id: 'overview', label: '概览', icon: LayoutDashboard },
   { id: 'brainstorm', label: '头脑风暴', icon: Lightbulb },
+  { id: 'list', label: '列表', icon: ListIcon },
   { id: 'board', label: '看板', icon: KanbanSquare },
   { id: 'calendar', label: '日历', icon: CalendarDays },
   { id: 'gantt', label: '甘特', icon: GanttChartSquare },
-  { id: 'overview', label: '概览', icon: LayoutDashboard },
 ];
 
 const DEFAULT_FILTERS = { assignee: 'all', priority: '', tagIds: [], statusIds: [], hideDone: false };

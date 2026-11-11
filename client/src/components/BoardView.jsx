@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, ListTree, MessageSquare, Plus } from 'lucide-react';
+import { CalendarDays, ListTree, MessageSquare, Plus, Users } from 'lucide-react';
 import { Avatar, DueBadge, PriorityFlag, TagChip } from './ui.jsx';
 
 function BoardCard({ task, onOpen, onDragStart }) {
@@ -28,6 +28,7 @@ function BoardCard({ task, onOpen, onDragStart }) {
           <DueBadge date={task.due_date} statusType={task.status?.type} />
         </span>
         <div className="board-card-right">
+          {task.participant_count > 0 && <span><Users size={12} />{task.participant_count}</span>}
           {task.subtask_count > 0 && <span><ListTree size={12} />{task.subtask_count}</span>}
           {task.comment_count > 0 && <span><MessageSquare size={12} />{task.comment_count}</span>}
           {task.assignee ? <Avatar user={task.assignee} size={22} /> : <span className="avatar-empty avatar-empty-sm" />}

@@ -22,6 +22,7 @@ import {
   Upload,
   UserPlus,
   UserRound,
+  UsersRound,
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
@@ -365,6 +366,14 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
     }
   }
 
+  async function toggleParticipant(personId) {
+    if (!detail) return;
+    const current = new Set((detail.participants || []).map((participant) => participant.id));
+    if (current.has(personId)) current.delete(personId);
+    else current.add(personId);
+    await patchTask({ participant_ids: [...current] });
+  }
+
   async function addExternalAssignee(name, close) {
     const trimmed = String(name || '').trim();
     if (!trimmed || !detail) return;
@@ -569,6 +578,50 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                           <p className="assignee-add-hint">外部责任人无需加入工作空间，添加后会保留在指派列表中。</p>
                         </>
                       )}
+                    </Popover>
+
+                    <Popover
+                      width={268}
+                      trigger={
+                        <button type="button" className={`quick-pill ${detail.participants?.length ? '' : 'is-empty'}`}>
+                          {detail.participants?.length ? (
+                            <span className="participant-mini-stack">
+                              {detail.participants.slice(0, 3).map((participant) => (
+                                <Avatar key={participant.id} user={participant} size={18} />
+                              ))}
+                            </span>
+                          ) : (
+                            <UsersRound size={15} />
+                          )}
+                          {detail.participants?.length ? `${detail.participants.length} 位参与人` : '参与人'}
+                          <ChevronDown size={13} />
+                        </button>
+                      }
+                    >
+                      <div className="menu-label">参与人（可多选）</div>
+                      {assignablePeople.map((person) => {
+                        const active = detail.participants?.some((participant) => participant.id === person.id);
+                        return (
+                          <MenuItem
+                            key={person.id}
+                            active={active}
+                            icon={<Avatar user={person} size={22} />}
+                            onClick={() => toggleParticipant(person.id)}
+                          >
+                            <span className="person-menu-label">
+                              {person.name}
+                              {person.is_external && <em className="external-badge">外部</em>}
+                            </span>
+                          </MenuItem>
+                        );
+                      })}
+                      {detail.participants?.length > 0 && (
+                        <>
+                          <MenuDivider />
+                          <MenuItem onClick={() => patchTask({ participant_ids: [] })}>清除参与人</MenuItem>
+                        </>
+                      )}
+                      <p className="participant-hint">参与人会收到任务上下文，但负责人仍然只有一位。</p>
                     </Popover>
 
                     <Popover
