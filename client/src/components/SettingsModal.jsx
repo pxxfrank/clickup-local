@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  AlertTriangle,
   Check,
   Copy,
   Database,
@@ -30,7 +31,7 @@ const TAG_COLORS = ['#61bd8f', '#5b8def', '#f78fb3', '#e5484d', '#f2a93b', '#9b7
 const ROLE_LABELS = { owner: '所有者', admin: '管理员', member: '成员' };
 
 export default function SettingsModal({ open, initialTab = 'profile', onClose }) {
-  const { bootstrap, user, refresh, toast, logout } = useApp();
+  const { bootstrap, user, refresh, toast, logout, navigate } = useApp();
   const [tab, setTab] = useState(initialTab);
   const [profile, setProfile] = useState({ name: '', title: '', color: '#7B68EE', current_password: '', new_password: '', confirm_password: '' });
   const [workspaceForm, setWorkspaceForm] = useState({ name: '', color: '#7B68EE' });
@@ -40,6 +41,9 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
   const [system, setSystem] = useState(null);
   const [busy, setBusy] = useState(false);
   const [removeMember, setRemoveMember] = useState(null);
+  const [deleteWorkspaceOpen, setDeleteWorkspaceOpen] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -58,6 +62,8 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
     });
     setInviteResult(null);
     setInvite({ email: '', name: '', role: 'member' });
+    setDeleteWorkspaceOpen(false);
+    setDeleteConfirmName('');
     api.get('/system').then(setSystem).catch(() => setSystem(null));
     // Intentionally only reinitialize when the dialog opens or the requested tab changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,6 +107,23 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
       toast(error.message, 'error');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function deleteWorkspace() {
+    if (!bootstrap?.workspace || deleteConfirmName !== bootstrap.workspace.name) return;
+    setDeletingWorkspace(true);
+    try {
+      await api.delete(`/workspaces/${bootstrap.workspace.id}`, { confirm_name: deleteConfirmName });
+      setDeleteWorkspaceOpen(false);
+      onClose();
+      navigate('/home');
+      await refresh();
+      toast('工作空间已删除');
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setDeletingWorkspace(false);
     }
   }
 
@@ -332,6 +355,32 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
                   </div>
                 </form>
 
+                {isOwner && (
+                  <div className="danger-zone">
+                    <div className="danger-zone-head">
+                      <span className="danger-zone-icon"><AlertTriangle size={17} /></span>
+                      <div>
+                        <strong>删除工作空间</strong>
+                        <span>永久删除此工作空间及其中所有内容。此操作无法撤销。</span>
+                      </div>
+                    </div>
+                    <p>
+                      删除后，所有空间、列表、任务、子任务、评论、文档和附件都会从本机删除。
+                      你仍然可以创建一个新的工作空间。
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-danger-outline"
+                      onClick={() => {
+                        setDeleteConfirmName('');
+                        setDeleteWorkspaceOpen(true);
+                      }}
+                    >
+                      <Trash2 size={14} /> 删除工作空间
+                    </button>
+                  </div>
+                )}
+
                 <div className="settings-divider" />
                 <div className="settings-content-head">
                   <h3>数据与备份</h3>
@@ -488,6 +537,53 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
             )}
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={deleteWorkspaceOpen}
+        onClose={() => setDeleteWorkspaceOpen(false)}
+        title="删除工作空间"
+        subtitle="此操作不可撤销"
+        width={500}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setDeleteWorkspaceOpen(false)} disabled={deletingWorkspace}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={deleteWorkspace}
+              disabled={deletingWorkspace || deleteConfirmName !== bootstrap?.workspace?.name}
+            >
+              {deletingWorkspace ? <Spinner size={15} /> : <Trash2 size={15} />}
+              永久删除工作空间
+            </button>
+          </>
+        }
+      >
+        <div className="delete-workspace-warning">
+          <AlertTriangle size={20} />
+          <div>
+            <strong>你将永久删除「{bootstrap?.workspace?.name}」</strong>
+            <p>所有成员将立即失去访问权限。工作空间内的所有数据会从本机删除，且无法恢复。</p>
+          </div>
+        </div>
+        <label className="field delete-confirm-field">
+          <span className="field-label">
+            请输入工作空间名称 <code>{bootstrap?.workspace?.name}</code> 以确认
+          </span>
+          <input
+            className="input"
+            autoFocus
+            value={deleteConfirmName}
+            onChange={(event) => setDeleteConfirmName(event.target.value)}
+            placeholder={bootstrap?.workspace?.name}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') deleteWorkspace();
+            }}
+          />
+        </label>
       </Modal>
 
       <ConfirmDialog

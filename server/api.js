@@ -1308,6 +1308,38 @@ export function createApiRouter() {
     res.json(db.prepare('SELECT * FROM workspaces WHERE id = ?').get(workspaceId));
   });
 
+  router.delete('/workspaces/:id', (req, res) => {
+    const workspace = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(req.params.id);
+    if (!workspace) return res.status(404).json({ error: '工作空间不存在' });
+    const role = workspaceRole(workspace.id, req.user.id);
+    if (role !== 'owner') return res.status(403).json({ error: '只有工作空间所有者可以删除工作空间' });
+    if (req.body?.confirm_name !== undefined && req.body.confirm_name !== workspace.name) {
+      return res.status(400).json({ error: '工作空间名称不匹配' });
+    }
+    const files = db
+      .prepare(
+        `SELECT a.file_path FROM attachments a
+         JOIN tasks t ON t.id = a.task_id
+         JOIN lists l ON l.id = t.list_id
+         JOIN spaces s ON s.id = l.space_id
+         WHERE s.workspace_id = ?`
+      )
+      .all(workspace.id);
+    db.prepare('DELETE FROM workspaces WHERE id = ?').run(workspace.id);
+    for (const file of files) {
+      const filePath = path.join(UPLOAD_DIR, file.file_path);
+      try {
+        if (filePath.startsWith(UPLOAD_DIR) && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch {
+        // The database is already updated; leftover local files are harmless.
+      }
+    }
+    const remaining = db
+      .prepare('SELECT COUNT(*) AS c FROM workspace_members WHERE user_id = ?')
+      .get(req.user.id).c;
+    res.json({ ok: true, deleted: workspace.name, remaining_workspaces: remaining });
+  });
+
   router.post('/workspaces', (req, res) => {
     const name = String(req.body?.name || '').trim();
     if (!name) return res.status(400).json({ error: '工作空间名称不能为空' });

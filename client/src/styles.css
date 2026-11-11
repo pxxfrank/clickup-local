@@ -1414,8 +1414,8 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.5);
-  opacity: 0;
+  color: rgba(255, 255, 255, 0.58);
+  opacity: 0.38;
   transition: opacity 0.12s ease, background 0.12s ease;
   flex: none;
 }

@@ -231,6 +231,27 @@
     display: flex;
   }
 
+  .onboarding-page {
+    padding: 20px 18px;
+  }
+
+  .onboarding-card {
+    padding: 28px 24px 26px;
+    border-radius: 16px;
+  }
+
+  .onboarding-card h1 {
+    font-size: 25px;
+  }
+
+  .onboarding-desc {
+    font-size: 12.5px;
+  }
+
+  .onboarding-foot {
+    margin-top: 16px;
+  }
+
   .home-page,
   .inbox-page {
     padding: 20px 18px 60px;

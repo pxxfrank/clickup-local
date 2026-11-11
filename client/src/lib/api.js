@@ -48,7 +48,7 @@ export const api = {
   patch(path, body) {
     return apiRequest(path, { method: 'PATCH', body });
   },
-  delete(path) {
-    return apiRequest(path, { method: 'DELETE' });
+  delete(path, body) {
+    return apiRequest(path, { method: 'DELETE', body });
   },
 };

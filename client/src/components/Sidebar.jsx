@@ -8,10 +8,12 @@ import {
   Inbox,
   MoreHorizontal,
   PanelLeftClose,
+  Pencil,
   Plus,
   Search,
   Settings,
   Sparkles,
+  Trash2,
   UserPlus,
   X,
 } from 'lucide-react';
@@ -92,8 +94,19 @@ export default function Sidebar({ open, onClose }) {
     setBusy(true);
     try {
       if (kind === 'rename') {
-        const path = item.type === 'space' ? `/spaces/${item.id}` : item.type === 'folder' ? `/folders/${item.id}` : `/lists/${item.id}`;
-        await api.patch(path, { name });
+        const targetType = itemModal.type;
+        const path =
+          targetType === 'space'
+            ? `/spaces/${item.id}`
+            : targetType === 'folder'
+              ? `/folders/${item.id}`
+              : `/lists/${item.id}`;
+        const patch = { name };
+        if (targetType === 'space') {
+          patch.icon = itemModal.icon;
+          patch.color = itemModal.color;
+        }
+        await api.patch(path, patch);
         await refreshBootstrap();
       } else if (kind === 'space') {
         await api.post('/spaces', {
@@ -118,7 +131,7 @@ export default function Sidebar({ open, onClose }) {
         navigate(`/list/${created.id}`);
       }
       setItemModal(null);
-      toast(kind === 'rename' ? '已更新名称' : '创建成功');
+      toast(kind === 'rename' ? '已保存修改' : '创建成功');
     } catch (error) {
       toast(error.message, 'error');
     } finally {
@@ -303,7 +316,7 @@ export default function Sidebar({ open, onClose }) {
                   openSettings('workspace');
                 }}
               >
-                工作空间设置
+                编辑 / 删除工作空间
               </MenuItem>
             </>
           )}
@@ -350,16 +363,17 @@ export default function Sidebar({ open, onClose }) {
                       <span className="tree-label">{space.name}</span>
                     </button>
                     <Popover
-                      width={200}
+                      width={205}
                       align="right"
                       trigger={
-                        <span className="tree-more">
-                          <Plus size={14} />
+                        <span className="tree-more" title="空间操作">
+                          <MoreHorizontal size={14} />
                         </span>
                       }
                     >
                       {({ close }) => (
                         <>
+                          <MenuLabel>空间操作</MenuLabel>
                           <MenuItem icon={<Plus size={15} />} onClick={() => { close(); openCreate('list', space, null); }}>
                             新建列表
                           </MenuItem>
@@ -367,10 +381,10 @@ export default function Sidebar({ open, onClose }) {
                             新建文件夹
                           </MenuItem>
                           <MenuDivider />
-                          <MenuItem icon={<Settings size={15} />} onClick={() => { close(); openRename(space, 'space'); }}>
-                            重命名空间
+                          <MenuItem icon={<Pencil size={15} />} onClick={() => { close(); openRename(space, 'space'); }}>
+                            编辑空间
                           </MenuItem>
-                          <MenuItem danger onClick={() => { close(); setDeleteTarget({ type: 'space', id: space.id, name: space.name }); }}>
+                          <MenuItem danger icon={<Trash2 size={15} />} onClick={() => { close(); setDeleteTarget({ type: 'space', id: space.id, name: space.name }); }}>
                             删除空间
                           </MenuItem>
                         </>
@@ -396,8 +410,8 @@ export default function Sidebar({ open, onClose }) {
                                 width={200}
                                 align="right"
                                 trigger={
-                                  <span className="tree-more">
-                                    <Plus size={14} />
+                                  <span className="tree-more" title="文件夹操作">
+                                    <MoreHorizontal size={14} />
                                   </span>
                                 }
                               >
@@ -524,11 +538,15 @@ export default function Sidebar({ open, onClose }) {
               ? '新建文件夹'
               : itemModal?.kind === 'list'
                 ? '新建列表'
-                : '重命名'
+                : itemModal?.type === 'space'
+                  ? '编辑空间'
+                  : '重命名'
         }
         subtitle={
           itemModal?.kind === 'rename'
-            ? '修改名称后立即生效'
+            ? itemModal?.type === 'space'
+              ? '修改空间的名称、图标和颜色'
+              : '修改名称后立即生效'
             : '空间用于组织团队，文件夹和列表用于组织工作'
         }
         width={460}
@@ -553,15 +571,23 @@ export default function Sidebar({ open, onClose }) {
                 autoFocus
                 value={itemModal.name}
                 onChange={(event) => setItemModal({ ...itemModal, name: event.target.value })}
-                placeholder={itemModal.kind === 'space' ? '例如：产品研发' : itemModal.kind === 'folder' ? '例如：移动端 App' : '例如：迭代计划'}
+                placeholder={
+                  itemModal.kind === 'space' || (itemModal.kind === 'rename' && itemModal.type === 'space')
+                    ? '例如：产品研发'
+                    : itemModal.kind === 'folder'
+                      ? '例如：移动端 App'
+                      : '例如：迭代计划'
+                }
               />
             </label>
-            {(itemModal.kind === 'space' || itemModal.kind === 'list') && (
+            {(itemModal.kind === 'space' ||
+              itemModal.kind === 'list' ||
+              (itemModal.kind === 'rename' && itemModal.type === 'space')) && (
               <>
                 <div className="field">
                   <span className="field-label">图标</span>
                   <div className="emoji-picker">
-                    {(itemModal.kind === 'space' ? ICONS : LIST_ICONS).map((icon) => (
+                    {(itemModal.kind === 'space' || itemModal.type === 'space' ? ICONS : LIST_ICONS).map((icon) => (
                       <button
                         type="button"
                         key={icon}

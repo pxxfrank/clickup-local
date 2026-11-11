@@ -671,6 +671,161 @@
   font-size: 10px;
 }
 
+/* ================= Workspace onboarding ================= */
+
+.onboarding-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 40px 24px;
+  color: #fff;
+  background:
+    radial-gradient(80% 55% at 90% 0%, rgba(123, 104, 238, 0.42), transparent 60%),
+    radial-gradient(60% 50% at 5% 100%, rgba(88, 64, 190, 0.35), transparent 65%),
+    linear-gradient(145deg, #1d1a30 0%, #26213f 60%, #1b182a 100%);
+}
+
+.onboarding-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.onboarding-glow-a {
+  width: 480px;
+  height: 480px;
+  right: -160px;
+  top: -200px;
+  background: radial-gradient(circle, rgba(140, 120, 255, 0.3), transparent 65%);
+}
+
+.onboarding-glow-b {
+  width: 380px;
+  height: 380px;
+  left: -180px;
+  bottom: -180px;
+  background: radial-gradient(circle, rgba(90, 65, 200, 0.26), transparent 65%);
+}
+
+.onboarding-top {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.onboarding-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 11.5px;
+}
+
+.onboarding-logout:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.onboarding-card {
+  position: relative;
+  z-index: 2;
+  width: min(520px, 100%);
+  margin: auto;
+  padding: 36px 38px 32px;
+  background: #fff;
+  color: var(--ink);
+  border-radius: 20px;
+  box-shadow: 0 32px 90px rgba(8, 5, 24, 0.42);
+  animation: modal-in 0.24s ease;
+}
+
+.onboarding-symbol {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(145deg, #8b7aff, #6754de);
+  box-shadow: 0 10px 24px rgba(123, 104, 238, 0.3);
+  margin-bottom: 17px;
+}
+
+.onboarding-eyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+.onboarding-card h1 {
+  margin-top: 7px;
+  font-size: 28px;
+  font-weight: 780;
+  letter-spacing: -0.8px;
+}
+
+.onboarding-desc {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.onboarding-form {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.onboarding-submit {
+  width: 100%;
+  height: 44px;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.onboarding-note {
+  display: flex;
+  gap: 8px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--muted-2);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+.onboarding-note svg {
+  color: var(--green);
+  flex: none;
+  margin-top: 1px;
+}
+
+.onboarding-foot {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+  color: rgba(255, 255, 255, 0.26);
+  font-size: 10px;
+}
+
 /* ================= Home ================= */
 
 .home-page {

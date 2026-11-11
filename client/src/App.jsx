@@ -13,6 +13,7 @@ import TaskDrawer from './components/TaskDrawer.jsx';
 import SearchModal from './components/SearchModal.jsx';
 import CreateTaskModal from './components/CreateTaskModal.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
+import WorkspaceOnboarding from './components/WorkspaceOnboarding.jsx';
 import { LoadingScreen, ToastStack } from './components/ui.jsx';
 import { findList } from './lib/tree.js';
 
@@ -175,11 +176,21 @@ export default function App() {
     const data = await loadBootstrap();
     if (data) {
       const current = readRoute();
-      if (!window.location.hash || (current.type === 'list' && !findList(data.spaces, current.id))) {
+      if (!data.workspace || !window.location.hash || (current.type === 'list' && !findList(data.spaces, current.id))) {
         navigate('/home');
       }
     }
   }, [loadBootstrap, navigate]);
+
+  const handleWorkspaceCreated = useCallback(
+    async (name) => {
+      const created = await api.post('/workspaces', { name });
+      const data = await loadBootstrap(created.id);
+      if (!data?.workspace) throw new Error('工作空间创建失败，请重试');
+      navigate('/home');
+    },
+    [loadBootstrap, navigate]
+  );
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -220,6 +231,7 @@ export default function App() {
       route,
       navigate,
       refresh,
+      refreshBootstrap: refresh,
       dataVersion,
       toast,
       openTask,
@@ -236,6 +248,9 @@ export default function App() {
   if (authLoading) return <LoadingScreen label="正在打开你的工作空间…" />;
   if (!bootstrap) {
     return <LoginPage onAuthenticated={handleAuthenticated} />;
+  }
+  if (!bootstrap.workspace) {
+    return <WorkspaceOnboarding user={bootstrap.user} onCreate={handleWorkspaceCreated} onLogout={logout} />;
   }
 
   return (
