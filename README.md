@@ -17,7 +17,7 @@
 | 工作台 | 主页统计、我的任务、完成趋势、工作负载、团队动态、收件箱未读 |
 | 文档 | 工作空间级 Markdown 文档，自动保存、预览与编辑 |
 | 设置 | 个人资料与密码、工作空间信息、成员邀请、标签管理、工作流状态与自定义字段 |
-| 部署 | Windows 一键启动、开机自启服务安装、Docker 部署、SQLite 数据文件备份 |
+| 部署 | Windows 安装包、一键启动、开机自启服务、Docker 部署、SQLite 数据文件备份 |
 
 ### 界面截图
 
@@ -35,7 +35,45 @@
 
 ![移动端](docs/screenshots/mobile-list.png)
 
-## 快速开始
+## Windows 安装包（推荐）
+
+不想处理 Node.js、命令行或端口环境时，可以直接使用 Windows 安装包：
+
+**下载：** [GitHub Releases](https://github.com/pxxfrank/clickup-local/releases/latest)  
+**文件名：** `ClickUp-Local-Setup-1.0.0.exe`（约 24 MB，已内置 Node.js 运行时）
+
+安装包支持 Windows 10 / 11 x64，安装到当前用户目录，**不需要管理员权限**，也不需要预装 Node.js。
+
+安装后会提供：
+
+- 桌面与开始菜单快捷方式，点击自动启动后台服务并打开浏览器
+- **后台服务模式**：可设置为登录 Windows 时自动在后台运行
+- **调试控制台模式**：开始菜单打开后直接显示运行日志，方便定位启动失败
+- 日志、数据目录、停止服务、卸载等独立入口
+- 升级安装时自动停止旧服务，保留本地数据
+
+安装版路径：
+
+| 内容 | 路径 |
+| --- | --- |
+| 程序 | `%LOCALAPPDATA%\Programs\ClickUpLocal` |
+| 数据 | `%LOCALAPPDATA%\ClickUpLocal\data` |
+| 日志 | `%LOCALAPPDATA%\ClickUpLocal\logs` |
+
+卸载默认保留数据与日志；确认不再使用时手动删除 `%LOCALAPPDATA%\ClickUpLocal`。
+
+安装版使用独立的 `%LOCALAPPDATA%\ClickUpLocal\data` 目录。如果要从源码版迁移数据，请先停止两边的服务，再将源码目录中的 `data\clickup.db` 和 `data\uploads\` 复制到该目录。
+
+> 安装包未使用商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”。
+> 如需从源码重新构建安装包：
+>
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1
+> ```
+>
+> 构建脚本会准备官方 Node.js 运行时、生产依赖和 NSIS 编译器，输出到 `release`。
+
+## 快速开始（源码）
 
 ### 环境要求
 
@@ -79,9 +117,9 @@ npm run dev
 
 登录页上的「使用演示工作空间」按钮可以一键进入。演示数据只会在数据库为空时写入一次。
 
-## 安装为开机自启服务
+## 安装为开机自启服务（源码方式）
 
-如果希望 ClickUp 在登录 Windows 后自动在后台运行：
+如果使用源码版本，并希望 ClickUp 在登录 Windows 后自动在后台运行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install-service.ps1
