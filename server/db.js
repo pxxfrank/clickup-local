@@ -11,6 +11,7 @@ export const DATA_DIR = process.env.CLICKUP_DATA_DIR
   : path.join(ROOT, 'data');
 
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+export const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -340,6 +341,7 @@ export function getDb() {
   if (database) return database;
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
   database = new DatabaseSync(path.join(DATA_DIR, 'clickup.db'));
   database.exec('PRAGMA journal_mode = WAL;');
   database.exec('PRAGMA foreign_keys = ON;');
@@ -356,4 +358,124 @@ export function getDb() {
   // Drop expired sessions on boot.
   database.prepare('DELETE FROM sessions WHERE expires_at < ?').run(new Date().toISOString());
   return database;
+}
+
+export function closeDb() {
+  if (!database) return;
+  try {
+    database.close();
+  } catch {
+    // Ignore a close failure; reopening will still validate the file.
+  }
+  database = null;
+}
+
+function backupInfo(name) {
+  const fullPath = path.join(BACKUP_DIR, name);
+  const stat = fs.statSync(fullPath);
+  const stamp = name.match(/^clickup-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z-/);
+  const created_at = stamp
+    ? `${stamp[1]}T${stamp[2]}:${stamp[3]}:${stamp[4]}.${stamp[5]}Z`
+    : stat.mtime.toISOString();
+  return {
+    name,
+    size: stat.size,
+    created_at,
+    kind: name.includes('-auto.db') ? 'auto' : name.includes('-before-restore.db') ? 'safety' : 'manual',
+  };
+}
+
+export function listBackups() {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  return fs
+    .readdirSync(BACKUP_DIR)
+    .filter((name) => name.endsWith('.db'))
+    .map((name) => backupInfo(name))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+function backupPath(name) {
+  const safe = path.basename(String(name || ''));
+  if (safe !== name || !/^clickup-[A-Za-z0-9._-]+\.db$/.test(safe)) {
+    throw new Error('备份文件名无效');
+  }
+  const fullPath = path.join(BACKUP_DIR, safe);
+  if (!fullPath.startsWith(`${BACKUP_DIR}${path.sep}`) || !fs.existsSync(fullPath)) {
+    throw new Error('备份不存在');
+  }
+  return fullPath;
+}
+
+function pruneBackups(keep = 30) {
+  const files = listBackups();
+  for (const file of files.slice(keep)) {
+    try {
+      fs.unlinkSync(path.join(BACKUP_DIR, file.name));
+    } catch {
+      // Ignore cleanup failures.
+    }
+  }
+}
+
+export function createBackup(kind = 'manual') {
+  const db = getDb();
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  try {
+    db.exec('PRAGMA wal_checkpoint(FULL)');
+  } catch {
+    // A checkpoint failure should not block copying the main database file.
+  }
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const name = `clickup-${stamp}-${kind}.db`;
+  fs.copyFileSync(path.join(DATA_DIR, 'clickup.db'), path.join(BACKUP_DIR, name));
+  pruneBackups();
+  return backupInfo(name);
+}
+
+export function deleteBackup(name) {
+  const fullPath = backupPath(name);
+  fs.unlinkSync(fullPath);
+  return { ok: true };
+}
+
+export function getBackupPath(name) {
+  return backupPath(name);
+}
+
+function validateBackupFile(fullPath) {
+  const probe = new DatabaseSync(fullPath);
+  try {
+    const integrity = probe.prepare('PRAGMA integrity_check').get();
+    const result = integrity ? Object.values(integrity)[0] : null;
+    if (result !== 'ok') throw new Error('备份文件完整性校验失败');
+    probe.prepare('SELECT COUNT(*) AS count FROM users').get();
+    probe.prepare('SELECT COUNT(*) AS count FROM workspaces').get();
+  } finally {
+    probe.close();
+  }
+}
+
+export function restoreBackup(name) {
+  const source = backupPath(name);
+  validateBackupFile(source);
+  const safety = createBackup('before-restore');
+  closeDb();
+  try {
+    fs.copyFileSync(source, path.join(DATA_DIR, 'clickup.db'));
+    for (const suffix of ['-wal', '-shm']) {
+      const file = path.join(DATA_DIR, `clickup.db${suffix}`);
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+    }
+    const restoredDb = getDb();
+    return { backup: backupInfo(name), safety, db: restoredDb };
+  } catch (error) {
+    closeDb();
+    try {
+      fs.copyFileSync(path.join(BACKUP_DIR, safety.name), path.join(DATA_DIR, 'clickup.db'));
+      getDb();
+    } catch {
+      // The caller will report the original restore error.
+    }
+    throw error;
+  }
 }

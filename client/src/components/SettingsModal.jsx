@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
+  ArchiveRestore,
   Check,
   Copy,
   Database,
@@ -19,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
-import { formatBytes, relativeTime } from '../lib/date.js';
+import { formatBytes, formatDate, relativeTime } from '../lib/date.js';
 import {
   Avatar,
   ConfirmDialog,
@@ -40,6 +41,10 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
   const [inviteResult, setInviteResult] = useState(null);
   const [tagDraft, setTagDraft] = useState({ name: '', color: '#61bd8f' });
   const [system, setSystem] = useState(null);
+  const [backups, setBackups] = useState([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState(null);
+  const [restoring, setRestoring] = useState(false);
   const [busy, setBusy] = useState(false);
   const [removeMember, setRemoveMember] = useState(null);
   const [removeContactTarget, setRemoveContactTarget] = useState(null);
@@ -71,6 +76,15 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
     setRemoveContactTarget(null);
     setDeleteTemplateTarget(null);
     api.get('/system').then(setSystem).catch(() => setSystem(null));
+    setBackups([]);
+    if (bootstrap?.role === 'owner' && bootstrap?.workspace?.id) {
+      setBackupsLoading(true);
+      api
+        .get(`/backups?workspaceId=${encodeURIComponent(bootstrap.workspace.id)}`)
+        .then((data) => setBackups(data.backups || []))
+        .catch(() => setBackups([]))
+        .finally(() => setBackupsLoading(false));
+    }
     // Intentionally only reinitialize when the dialog opens or the requested tab changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialTab]);
@@ -143,6 +157,39 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
       toast(error.message, 'error');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function createBackupNow() {
+    const workspaceId = bootstrap?.workspace?.id;
+    if (!workspaceId) return;
+    setBusy(true);
+    try {
+      const result = await api.post('/backups', { workspace_id: workspaceId });
+      const data = await api.get(`/backups?workspaceId=${encodeURIComponent(workspaceId)}`);
+      setBackups(data.backups || []);
+      toast(`备份已创建：${result.backup.name}`);
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restoreBackupNow() {
+    const workspaceId = bootstrap?.workspace?.id;
+    if (!restoreTarget || !workspaceId) return;
+    setRestoring(true);
+    try {
+      await api.post(
+        `/backups/${encodeURIComponent(restoreTarget.name)}/restore?workspaceId=${encodeURIComponent(workspaceId)}`,
+        { confirm: 'restore', workspace_id: workspaceId }
+      );
+      toast('数据库已恢复，正在重新加载');
+      setTimeout(() => window.location.reload(), 700);
+    } catch (error) {
+      toast(error.message, 'error');
+      setRestoring(false);
     }
   }
 
@@ -448,8 +495,58 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
                 </div>
                 {system && <p className="system-path">数据目录：<code>{system.data_dir}</code></p>}
                 <a className="btn btn-ghost" href="/api/backup" download>
-                  <Download size={15} /> 下载数据库备份
+                  <Download size={15} /> 下载当前数据库
                 </a>
+
+                {isOwner && (
+                  <div className="backup-manager">
+                    <div className="backup-manager-head">
+                      <div>
+                        <h4>自动与手动备份</h4>
+                        <p>每天自动备份一次，保留最近 30 份；恢复前会自动创建一份安全备份。</p>
+                      </div>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={createBackupNow} disabled={busy || backupsLoading}>
+                        <ArchiveRestore size={14} /> 立即备份
+                      </button>
+                    </div>
+                    {backupsLoading ? (
+                      <div className="backup-loading"><Spinner size={14} /> 正在读取备份…</div>
+                    ) : backups.length ? (
+                      <div className="backup-list">
+                        {backups.slice(0, 8).map((backup) => (
+                          <div className="backup-row" key={backup.name}>
+                            <Database size={14} />
+                            <div className="backup-main">
+                              <strong>
+                                {backup.kind === 'auto' ? '自动备份' : backup.kind === 'safety' ? '安全备份' : '手动备份'}
+                                <span>{formatBytes(backup.size)}</span>
+                              </strong>
+                              <span>{formatDate(backup.created_at, 'yyyy-MM-dd HH:mm')} · {backup.name}</span>
+                            </div>
+                            <a
+                              className="icon-btn"
+                              href={`/api/backups/${encodeURIComponent(backup.name)}/download?workspaceId=${encodeURIComponent(bootstrap.workspace.id)}`}
+                              download
+                              title="下载备份"
+                            >
+                              <Download size={14} />
+                            </a>
+                            <button
+                              type="button"
+                              className="icon-btn icon-btn-danger"
+                              onClick={() => setRestoreTarget(backup)}
+                              title="恢复此备份"
+                            >
+                              <ArchiveRestore size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="backup-empty">还没有备份。点击「立即备份」创建第一份。</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -722,6 +819,16 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
         busy={busy}
         onClose={() => setDeleteTemplateTarget(null)}
         onConfirm={deleteTemplateNow}
+      />
+
+      <ConfirmDialog
+        open={Boolean(restoreTarget)}
+        title="恢复数据库备份"
+        confirmLabel="恢复并重新加载"
+        message={`将用「${restoreTarget?.name || ''}」覆盖整个本地数据库，包括所有工作空间。恢复前会自动创建安全备份；未保存的编辑会丢失。`}
+        busy={restoring}
+        onClose={() => setRestoreTarget(null)}
+        onConfirm={restoreBackupNow}
       />
     </>
   );

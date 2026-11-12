@@ -602,6 +602,112 @@
   color: var(--muted);
 }
 
+/* ================= Backups ================= */
+
+.backup-manager {
+  margin-top: 15px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+
+.backup-manager-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.backup-manager-head h4 {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.backup-manager-head p {
+  margin-top: 2px;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--muted-2);
+}
+
+.backup-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.backup-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+}
+
+.backup-row + .backup-row {
+  border-top: 1px solid #f3f2f7;
+}
+
+.backup-row > svg {
+  color: var(--muted-2);
+  flex: none;
+}
+
+.backup-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.backup-main strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--ink-2);
+}
+
+.backup-main strong span {
+  font-size: 8.5px;
+  font-weight: 500;
+  color: var(--muted-2);
+}
+
+.backup-main > span {
+  font-size: 8.5px;
+  color: var(--muted-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backup-row .icon-btn {
+  width: 23px;
+  height: 23px;
+  flex: none;
+}
+
+.backup-loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  color: var(--muted-2);
+  font-size: 9.5px;
+}
+
+.backup-empty {
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  color: var(--muted-2);
+  font-size: 9.5px;
+}
+
 /* ================= Portfolio ================= */
 
 .portfolio-page {

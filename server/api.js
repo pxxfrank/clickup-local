@@ -1,7 +1,16 @@
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
-import { getDb, UPLOAD_DIR, DATA_DIR } from './db.js';
+import {
+  getDb,
+  UPLOAD_DIR,
+  DATA_DIR,
+  listBackups,
+  createBackup,
+  deleteBackup,
+  restoreBackup,
+  getBackupPath,
+} from './db.js';
 import { randomId, hashPassword, verifyPassword } from './security.js';
 import { publicUser } from './auth.js';
 
@@ -519,7 +528,7 @@ function getWorkspaceOrFirst(userId, workspaceId) {
 
 export function createApiRouter() {
   const router = express.Router();
-  const db = getDb();
+  let db = getDb();
 
   router.get('/bootstrap', (req, res) => {
     const { workspace, memberships } = getWorkspaceOrFirst(req.user.id, req.query.workspaceId);
@@ -799,6 +808,9 @@ export function createApiRouter() {
   .print-bar span { color: rgba(255,255,255,.66); }
   .report-shell { padding: 24px 12px 42px; }
   .report { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 15mm 14mm; background: #fff; box-shadow: 0 10px 34px rgba(24,20,45,.12); }
+  .report[contenteditable="true"] { outline: 2px dashed ${reportColor}; outline-offset: 5px; cursor: text; }
+  .report[contenteditable="true"]:focus { outline-color: ${reportColor}; }
+  @media print { .report[contenteditable="true"] { outline: none; } }
   .report-header { border-top: 5px solid ${reportColor}; padding-top: 15px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
   .kicker { color: ${reportColor}; font-size: 9pt; font-weight: 750; letter-spacing: 1.5px; text-transform: uppercase; }
   h1 { margin: 5px 0 4px; font-size: 25pt; line-height: 1.12; letter-spacing: -.7px; }
@@ -1515,13 +1527,77 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.5.0',
+      version: '1.6.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
       workspaces: db.prepare('SELECT COUNT(*) AS c FROM workspaces').get().c,
       tasks: db.prepare('SELECT COUNT(*) AS c FROM tasks').get().c,
     });
+  });
+
+  function canManageBackups(req) {
+    const { workspace } = getWorkspaceOrFirst(req.user.id, req.query.workspaceId || req.body?.workspace_id);
+    return Boolean(workspace && workspaceRole(workspace.id, req.user.id) === 'owner');
+  }
+
+  router.get('/backups', (req, res) => {
+    if (!canManageBackups(req)) return res.status(403).json({ error: '只有工作空间所有者可以管理备份' });
+    res.json({ backups: listBackups() });
+  });
+
+  router.post('/backups', (req, res) => {
+    if (!canManageBackups(req)) return res.status(403).json({ error: '只有工作空间所有者可以创建备份' });
+    const backup = createBackup('manual');
+    res.status(201).json({ backup });
+  });
+
+  router.get('/backups/:name/download', (req, res) => {
+    if (!canManageBackups(req)) return res.status(403).json({ error: '只有工作空间所有者可以下载备份' });
+    try {
+      const fullPath = getBackupPath(req.params.name);
+      res.download(fullPath, req.params.name);
+    } catch (error) {
+      res.status(404).json({ error: error.message });
+    }
+  });
+
+  router.delete('/backups/:name', (req, res) => {
+    if (!canManageBackups(req)) return res.status(403).json({ error: '只有工作空间所有者可以删除备份' });
+    try {
+      deleteBackup(req.params.name);
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(404).json({ error: error.message });
+    }
+  });
+
+  router.post('/backups/:name/restore', (req, res) => {
+    if (!canManageBackups(req)) return res.status(403).json({ error: '只有工作空间所有者可以恢复备份' });
+    if (req.body?.confirm !== 'restore') {
+      return res.status(400).json({ error: '请确认恢复操作' });
+    }
+    try {
+      const restored = restoreBackup(req.params.name);
+      db = restored.db;
+      // Keep the current login session alive when the restored database still has the user.
+      try {
+        const currentUser = db.prepare('SELECT id FROM users WHERE id = ?').get(req.user.id);
+        if (currentUser && req.sessionToken) {
+          const now = new Date();
+          const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+          db.prepare(
+            `INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?,?,?,?)
+             ON CONFLICT(token) DO UPDATE SET expires_at = excluded.expires_at`
+          ).run(req.sessionToken, req.user.id, now.toISOString(), expires.toISOString());
+        }
+      } catch {
+        // If the restored backup predates this user, the next request will require login.
+      }
+      res.json({ ok: true, backup: restored.backup, safety_backup: restored.safety });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
   });
 
   router.get('/backup', (req, res) => {

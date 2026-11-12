@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
-import { getDb, DATA_DIR } from './db.js';
+import { getDb, DATA_DIR, createBackup } from './db.js';
 import { authRoutes, requireAuth, publicUser } from './auth.js';
 import { createApiRouter } from './api.js';
 
@@ -27,7 +27,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, name: 'ClickUp Local', version: '1.5.0', time: new Date().toISOString() });
+  res.json({ ok: true, name: 'ClickUp Local', version: '1.6.0', time: new Date().toISOString() });
 });
 
 const authRouter = express.Router();
@@ -78,6 +78,21 @@ function openBrowser(url) {
 }
 
 getDb();
+
+setTimeout(() => {
+  try {
+    createBackup('auto');
+  } catch (error) {
+    console.error('自动备份失败：', error.message);
+  }
+}, 5000).unref();
+setInterval(() => {
+  try {
+    createBackup('auto');
+  } catch (error) {
+    console.error('自动备份失败：', error.message);
+  }
+}, 24 * 60 * 60 * 1000).unref();
 
 const server = app.listen(PORT, HOST, () => {
   const url = `http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}`;
