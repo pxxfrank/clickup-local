@@ -245,6 +245,17 @@ export default function ListPage({ listId, view, onViewChange }) {
     Boolean(filters.hideDone);
   const canReorder = group === 'status' && sort === 'manual' && !search.trim() && !hasActiveFilters;
 
+  async function handleRenameTask(task, name) {
+    try {
+      await api.patch(`/tasks/${task.id}`, { name });
+      await refresh();
+      return true;
+    } catch (requestError) {
+      toast(requestError.message, 'error');
+      return false;
+    }
+  }
+
   async function handleMoveTask(taskId, statusId, index) {
     try {
       setData((current) => {
@@ -479,25 +490,27 @@ export default function ListPage({ listId, view, onViewChange }) {
                 );
               })}
             </nav>
-            <ViewToolbar
-              filters={filters}
-              setFilters={setFilters}
-              sort={sort}
-              setSort={setSort}
-              group={group}
-              setGroup={setGroup}
-              statuses={statuses}
-              search={search}
-              setSearch={setSearch}
-            />
-            <button type="button" className="btn btn-ghost btn-sm report-btn" onClick={() => setReportOpen(true)}>
-              <FileText size={15} />
-              周报
-            </button>
-            <button type="button" className="btn btn-primary btn-sm new-task-btn" onClick={() => openCreateTask({ list_id: list.id })}>
-              <Plus size={15} />
-              新建任务
-            </button>
+            <div className="view-bar-actions">
+              <ViewToolbar
+                filters={filters}
+                setFilters={setFilters}
+                sort={sort}
+                setSort={setSort}
+                group={group}
+                setGroup={setGroup}
+                statuses={statuses}
+                search={search}
+                setSearch={setSearch}
+              />
+              <button type="button" className="btn btn-ghost btn-sm report-btn" onClick={() => setReportOpen(true)}>
+                <FileText size={15} />
+                周报
+              </button>
+              <button type="button" className="btn btn-primary btn-sm new-task-btn" onClick={() => openCreateTask({ list_id: list.id })}>
+                <Plus size={15} />
+                新建任务
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -513,6 +526,7 @@ export default function ListPage({ listId, view, onViewChange }) {
             onUpdateTask={handleUpdateTask}
             onAddTask={handleAddTask}
             onMoveTask={handleMoveTask}
+            onRenameTask={handleRenameTask}
             canReorder={canReorder}
           />
         )}

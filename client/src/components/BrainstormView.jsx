@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Lightbulb, ListTodo, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowRight, Lightbulb, ListTodo, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { Spinner } from './ui.jsx';
@@ -11,6 +11,8 @@ export default function BrainstormView({ listId, listName, statuses = [], onComm
   const [input, setInput] = useState('');
   const [adding, setAdding] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState('');
   const inputRef = useRef(null);
   const targetStatus = statuses.find((status) => status.type === 'open') || statuses[0];
 
@@ -47,6 +49,31 @@ export default function BrainstormView({ listId, listName, statuses = [], onComm
       toast(error.message, 'error');
     } finally {
       setAdding(false);
+    }
+  }
+
+  function startEdit(item) {
+    setEditingId(item.id);
+    setEditDraft(item.name);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft('');
+  }
+
+  async function saveIdeaName(item) {
+    const name = editDraft.trim();
+    if (!name || name === item.name) {
+      cancelEdit();
+      return;
+    }
+    try {
+      const updated = await api.patch(`/brainstorm/${item.id}`, { name });
+      setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, ...updated } : entry)));
+      cancelEdit();
+    } catch (error) {
+      toast(error.message, 'error');
     }
   }
 
@@ -125,7 +152,32 @@ export default function BrainstormView({ listId, listName, statuses = [], onComm
               {items.map((item, index) => (
                 <div className="brainstorm-item" key={item.id}>
                   <span className="brainstorm-index">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="brainstorm-item-name">{item.name}</span>
+                  {editingId === item.id ? (
+                    <input
+                      className="brainstorm-item-input"
+                      autoFocus
+                      value={editDraft}
+                      onChange={(event) => setEditDraft(event.target.value)}
+                      onBlur={() => saveIdeaName(item)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          saveIdeaName(item);
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          cancelEdit();
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span className="brainstorm-item-name" onDoubleClick={() => startEdit(item)} title="双击直接编辑">
+                      {item.name}
+                    </span>
+                  )}
+                  <button type="button" className="brainstorm-edit" onClick={() => startEdit(item)} title="直接编辑想法">
+                    <Pencil size={12} />
+                  </button>
                   <button type="button" className="brainstorm-delete" onClick={() => removeIdea(item)} title="删除想法">
                     <Trash2 size={14} />
                   </button>

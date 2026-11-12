@@ -1903,7 +1903,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.7.0',
+      version: '1.7.1',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -2579,6 +2579,21 @@ export function createApiRouter() {
       'INSERT INTO brainstorm_items (id, list_id, name, created_by, created_at, order_index) VALUES (?,?,?,?,?,?)'
     ).run(item.id, item.list_id, item.name, item.created_by, item.created_at, item.order_index);
     res.status(201).json(item);
+  });
+
+  router.patch('/brainstorm/:id', (req, res) => {
+    const item = db
+      .prepare(
+        `SELECT b.*, s.workspace_id FROM brainstorm_items b JOIN lists l ON l.id = b.list_id
+         JOIN spaces s ON s.id = l.space_id JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = ?
+         WHERE b.id = ?`
+      )
+      .get(req.user.id, req.params.id);
+    if (!item) return res.status(404).json({ error: '想法不存在' });
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: '想法内容不能为空' });
+    db.prepare('UPDATE brainstorm_items SET name = ? WHERE id = ?').run(name, item.id);
+    res.json(db.prepare('SELECT * FROM brainstorm_items WHERE id = ?').get(item.id));
   });
 
   router.delete('/brainstorm/:id', (req, res) => {

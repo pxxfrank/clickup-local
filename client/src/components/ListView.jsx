@@ -8,6 +8,7 @@ import {
   GripVertical,
   ListTree,
   MessageSquare,
+  Pencil,
   Plus,
   UserRound,
   Users,
@@ -216,12 +217,21 @@ function TaskRow({
   onDragEnd,
   onDragOver,
   onDrop,
+  editing,
+  nameDraft,
+  onNameDraftChange,
+  onStartEdit,
+  onCommitEdit,
+  onCancelEdit,
+  savingName,
 }) {
   const completed = task.status?.type === 'done' || task.status?.type === 'closed';
   return (
     <div
-      className={`task-row ${completed ? 'is-completed' : ''} ${dragging ? 'is-dragging' : ''} ${dropBefore ? 'is-drop-before' : ''}`}
-      onClick={() => onOpen(task.id)}
+      className={`task-row ${completed ? 'is-completed' : ''} ${dragging ? 'is-dragging' : ''} ${dropBefore ? 'is-drop-before' : ''} ${editing ? 'is-editing-name' : ''}`}
+      onClick={() => {
+        if (!editing) onOpen(task.id);
+      }}
       role="button"
       tabIndex={0}
       draggable={Boolean(draggable)}
@@ -273,8 +283,44 @@ function TaskRow({
       <div className="task-main">
         <div className="task-name-line">
           {task.subtask_count > 0 && <ListTree size={13} className="task-subtask-icon" />}
-          <span className="task-name">{task.name}</span>
-          {task.tags?.map((tag) => (
+          {editing ? (
+            <input
+              className="task-name-input"
+              autoFocus
+              value={nameDraft}
+              disabled={savingName}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => onNameDraftChange(event.target.value)}
+              onBlur={() => onCommitEdit(task)}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  onCommitEdit(task);
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  onCancelEdit();
+                }
+              }}
+            />
+          ) : (
+            <>
+              <span className="task-name">{task.name}</span>
+              <button
+                type="button"
+                className="task-inline-edit"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onStartEdit(task);
+                }}
+                title="直接编辑任务名称"
+              >
+                <Pencil size={11} />
+              </button>
+            </>
+          )}
+          {!editing && task.tags?.map((tag) => (
             <TagChip key={tag.id} tag={tag} small />
           ))}
         </div>
@@ -414,11 +460,41 @@ export default function ListView({
   onUpdateTask,
   onAddTask,
   onMoveTask,
+  onRenameTask,
   canReorder = false,
 }) {
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [dragId, setDragId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [taskNameDraft, setTaskNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
+  function startTaskEdit(task) {
+    setEditingTaskId(task.id);
+    setTaskNameDraft(task.name);
+  }
+
+  function cancelTaskEdit() {
+    setEditingTaskId(null);
+    setTaskNameDraft('');
+  }
+
+  async function commitTaskEdit(task) {
+    if (savingName) return;
+    const name = taskNameDraft.trim();
+    if (!name || name === task.name) {
+      cancelTaskEdit();
+      return;
+    }
+    setSavingName(true);
+    try {
+      const result = onRenameTask ? await onRenameTask(task, name) : await onUpdateTask(task, { name });
+      if (result !== false) cancelTaskEdit();
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   useEffect(() => {
     if (!dragId) return undefined;
@@ -522,6 +598,13 @@ export default function ListView({
                     onDragEnd={resetDrag}
                     onDragOver={(event) => handleRowDragOver(event, group, index)}
                     onDrop={(event) => handleDrop(event, group)}
+                    editing={editingTaskId === task.id}
+                    nameDraft={taskNameDraft}
+                    onNameDraftChange={setTaskNameDraft}
+                    onStartEdit={startTaskEdit}
+                    onCommitEdit={commitTaskEdit}
+                    onCancelEdit={cancelTaskEdit}
+                    savingName={savingName}
                   />
                 ))}
                 {dragOverGroup && dropTarget.index >= group.tasks.length && (

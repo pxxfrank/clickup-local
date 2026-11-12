@@ -484,7 +484,8 @@
   overflow-wrap: anywhere;
 }
 
-.brainstorm-delete {
+.brainstorm-delete,
+.brainstorm-edit {
   width: 22px;
   height: 22px;
   border-radius: 5px;
@@ -496,8 +497,32 @@
   opacity: 0;
 }
 
-.brainstorm-item:hover .brainstorm-delete {
+.brainstorm-edit {
+  opacity: 0.3;
+}
+
+.brainstorm-item:hover .brainstorm-delete,
+.brainstorm-item:hover .brainstorm-edit {
   opacity: 1;
+}
+
+.brainstorm-edit:hover {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
+.brainstorm-item-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--brand-line);
+  border-radius: 5px;
+  outline: none;
+  background: #fff;
+  color: var(--ink-2);
+  font-size: 12px;
+  box-shadow: 0 0 0 3px rgba(123, 104, 238, 0.06);
 }
 
 .brainstorm-delete:hover {
@@ -929,7 +954,7 @@
 /* ================= Portfolio ================= */
 
 .portfolio-page {
-  padding: 20px 26px 42px;
+  padding: 20px 32px 42px;
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -1286,6 +1311,13 @@
 
 .portfolio-empty p {
   font-size: 10px;
+}
+
+@media (max-width: 1280px) {
+  .portfolio-page {
+    padding-left: 26px;
+    padding-right: 26px;
+  }
 }
 
 @media (max-width: 900px) {
