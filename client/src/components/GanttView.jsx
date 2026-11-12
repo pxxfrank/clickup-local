@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { GitBranch } from 'lucide-react';
 import { addDays, differenceInCalendarDays, eachDayOfInterval, format, isToday, isWeekend, parseDateValue, startOfDay } from '../lib/date.js';
 import { StatusDot } from './ui.jsx';
 
@@ -61,6 +62,83 @@ export default function GanttView({ tasks, onOpenTask }) {
     };
   }
 
+  const dependencyData = useMemo(() => {
+    const byId = new Map(rows.map((task) => [task.id, task]));
+    const depsById = new Map(
+      rows.map((task) => [
+        task.id,
+        (task.dependency_ids || []).filter((dependencyId) => byId.has(dependencyId)),
+      ])
+    );
+    const durations = new Map(
+      rows.map((task) => {
+        const start = parseDateValue(task.start_date || task.due_date);
+        const end = parseDateValue(task.due_date || task.start_date);
+        return [task.id, Math.max(1, differenceInCalendarDays(end, start) + 1)];
+      })
+    );
+    const memo = new Map();
+    const visiting = new Set();
+    function score(taskId) {
+      if (memo.has(taskId)) return memo.get(taskId);
+      if (visiting.has(taskId)) return durations.get(taskId) || 1;
+      visiting.add(taskId);
+      let best = 0;
+      for (const dependencyId of depsById.get(taskId) || []) {
+        best = Math.max(best, score(dependencyId));
+      }
+      visiting.delete(taskId);
+      const value = (durations.get(taskId) || 1) + best;
+      memo.set(taskId, value);
+      return value;
+    }
+    const hasEdges = [...depsById.values()].some((dependencies) => dependencies.length > 0);
+    const critical = new Set();
+    if (hasEdges) {
+      let current = null;
+      let bestScore = -1;
+      for (const task of rows) {
+        const value = score(task.id);
+        if (value > bestScore) {
+          bestScore = value;
+          current = task.id;
+        }
+      }
+      const seen = new Set();
+      while (current && !seen.has(current)) {
+        seen.add(current);
+        critical.add(current);
+        const remaining = score(current) - (durations.get(current) || 1);
+        if (remaining <= 0) break;
+        current = (depsById.get(current) || []).find((dependencyId) => score(dependencyId) === remaining) || null;
+      }
+    }
+    return { byId, depsById, critical, hasEdges };
+  }, [rows]);
+
+  const rowIndexById = new Map(rows.map((task, index) => [task.id, index]));
+  const dependencyLinks = [];
+  for (const [targetIndex, task] of rows.entries()) {
+    const targetGeometry = barGeometry(task);
+    if (!targetGeometry) continue;
+    for (const dependencyId of task.dependency_ids || []) {
+      const dependency = dependencyData.byId.get(dependencyId);
+      const dependencyIndex = rowIndexById.get(dependencyId);
+      const dependencyGeometry = dependency ? barGeometry(dependency) : null;
+      if (!dependency || dependencyIndex === undefined || !dependencyGeometry) continue;
+      const x1 = 300 + dependencyGeometry.left + (dependencyGeometry.span === 1 ? 18 : dependencyGeometry.width);
+      const y1 = dependencyIndex * 41 + 20.5;
+      const x2 = 300 + targetGeometry.left - 3;
+      const y2 = targetIndex * 41 + 20.5;
+      const bendX = Math.max(x1 + 8, x2 - 12);
+      dependencyLinks.push({
+        key: `${dependencyId}-${task.id}`,
+        d: `M ${x1} ${y1} H ${bendX} V ${y2} H ${x2}`,
+        critical: dependencyData.critical.has(dependencyId) && dependencyData.critical.has(task.id),
+      });
+    }
+  }
+
   if (!rows.length) {
     return (
       <div className="gantt-empty">
@@ -80,6 +158,12 @@ export default function GanttView({ tasks, onOpenTask }) {
 
   return (
     <div className="gantt-view">
+      {dependencyData.hasEdges && (
+        <div className="gantt-legend">
+          <span><i className="is-dependency" /> 依赖</span>
+          <span><i className="is-critical" /> 关键路径</span>
+        </div>
+      )}
       <div className="gantt-scroll">
         <div className="gantt" style={{ width: 300 + totalWidth }}>
           <div className="gantt-head-row">
@@ -114,11 +198,17 @@ export default function GanttView({ tasks, onOpenTask }) {
             {rows.map((task) => {
               const geometry = barGeometry(task);
               const start = task.start_date || task.due_date;
+              const isCritical = dependencyData.critical.has(task.id);
               return (
-                <div className="gantt-row" key={task.id}>
+                <div className={`gantt-row ${isCritical ? 'is-critical-row' : ''}`} key={task.id}>
                   <button type="button" className="gantt-label" onClick={() => onOpenTask(task.id)}>
                     <StatusDot color={task.status?.color} size={8} />
                     <span className="gantt-label-name">{task.name}</span>
+                    {task.dependency_ids?.length > 0 && (
+                      <span className="gantt-dependency-count" title={`${task.dependency_ids.length} 个前置任务`}>
+                        <GitBranch size={10} />{task.dependency_ids.length}
+                      </span>
+                    )}
                     <span className="gantt-label-date">{format(parseDateValue(start), 'M/d')}</span>
                   </button>
                   <div className="gantt-track" style={{ width: totalWidth }}>
@@ -132,7 +222,7 @@ export default function GanttView({ tasks, onOpenTask }) {
                     {geometry && (
                       <button
                         type="button"
-                        className={`gantt-bar ${geometry.span === 1 ? 'is-milestone' : ''}`}
+                        className={`gantt-bar ${geometry.span === 1 ? 'is-milestone' : ''} ${isCritical ? 'is-critical' : ''}`}
                         style={{
                           left: geometry.left,
                           width: geometry.span === 1 ? 18 : geometry.width,
@@ -155,6 +245,31 @@ export default function GanttView({ tasks, onOpenTask }) {
                 </div>
               );
             })}
+            {dependencyLinks.length > 0 && (
+              <svg
+                className="gantt-links"
+                width={300 + totalWidth}
+                height={rows.length * 41}
+                aria-hidden="true"
+              >
+                <defs>
+                  <marker id="gantt-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                    <path d="M0,0 L6,3 L0,6 Z" />
+                  </marker>
+                  <marker id="gantt-arrow-critical" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                    <path d="M0,0 L6,3 L0,6 Z" />
+                  </marker>
+                </defs>
+                {dependencyLinks.map((link) => (
+                  <path
+                    key={link.key}
+                    d={link.d}
+                    className={link.critical ? 'is-critical' : ''}
+                    markerEnd={`url(#${link.critical ? 'gantt-arrow-critical' : 'gantt-arrow'})`}
+                  />
+                ))}
+              </svg>
+            )}
             {todayVisible && (
               <div className="gantt-today-line" style={{ left: 300 + todayOffset * DAY_WIDTH + DAY_WIDTH / 2 }} />
             )}

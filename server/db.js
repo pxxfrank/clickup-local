@@ -225,6 +225,30 @@ CREATE TABLE IF NOT EXISTS task_participants (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS task_dependencies (
+  task_id TEXT NOT NULL,
+  depends_on_task_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (task_id, depends_on_task_id),
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+  FOREIGN KEY (depends_on_task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS automation_rules (
+  id TEXT PRIMARY KEY,
+  list_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  trigger_type TEXT NOT NULL,
+  trigger_config TEXT DEFAULT '{}',
+  action_type TEXT NOT NULL,
+  action_config TEXT DEFAULT '{}',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS checklists (
   id TEXT PRIMARY KEY,
   task_id TEXT NOT NULL,
@@ -329,6 +353,9 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_brainstorm_list ON brainstorm_items(list_id);
 CREATE INDEX IF NOT EXISTS idx_milestones_list ON milestones(list_id);
 CREATE INDEX IF NOT EXISTS idx_participants_task ON task_participants(task_id);
+CREATE INDEX IF NOT EXISTS idx_dependencies_task ON task_dependencies(task_id);
+CREATE INDEX IF NOT EXISTS idx_dependencies_dep ON task_dependencies(depends_on_task_id);
+CREATE INDEX IF NOT EXISTS idx_automations_list ON automation_rules(list_id);
 CREATE INDEX IF NOT EXISTS idx_phases_list ON project_phases(list_id);
 CREATE INDEX IF NOT EXISTS idx_retrospectives_list ON retrospectives(list_id);
 CREATE INDEX IF NOT EXISTS idx_retrospective_tasks ON retrospective_tasks(retrospective_id);
@@ -350,6 +377,16 @@ export function getDb() {
   const listColumns = database.prepare('PRAGMA table_info(lists)').all();
   if (!listColumns.some((column) => column.name === 'purpose')) {
     database.exec("ALTER TABLE lists ADD COLUMN purpose TEXT DEFAULT ''");
+  }
+  const taskColumns = database.prepare('PRAGMA table_info(tasks)').all();
+  if (!taskColumns.some((column) => column.name === 'recurrence_frequency')) {
+    database.exec("ALTER TABLE tasks ADD COLUMN recurrence_frequency TEXT DEFAULT 'none'");
+  }
+  if (!taskColumns.some((column) => column.name === 'recurrence_interval')) {
+    database.exec('ALTER TABLE tasks ADD COLUMN recurrence_interval INTEGER DEFAULT 1');
+  }
+  if (!taskColumns.some((column) => column.name === 'recurrence_until')) {
+    database.exec('ALTER TABLE tasks ADD COLUMN recurrence_until TEXT');
   }
   const row = database.prepare('SELECT COUNT(*) AS count FROM users').get();
   if (!row || row.count === 0) {

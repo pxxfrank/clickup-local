@@ -1555,6 +1555,92 @@
   position: relative;
 }
 
+.gantt-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted-2);
+  font-size: 9px;
+}
+
+.gantt-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gantt-legend i {
+  width: 14px;
+  height: 2px;
+  border-radius: 99px;
+  background: #b7b4c3;
+}
+
+.gantt-legend i.is-critical {
+  background: var(--red);
+  height: 3px;
+}
+
+.gantt-dependency-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted-2);
+  font-size: 8.5px;
+  flex: none;
+}
+
+.gantt-row.is-critical-row .gantt-label {
+  background: #fffafa;
+}
+
+.gantt-links {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.gantt-links path {
+  fill: none;
+  stroke: #b8b4c5;
+  stroke-width: 1.2;
+}
+
+.gantt-links path.is-critical {
+  stroke: var(--red);
+  stroke-width: 1.8;
+}
+
+.gantt-links marker path {
+  fill: #b8b4c5;
+  stroke: none;
+}
+
+.gantt-links marker#gantt-arrow-critical path,
+.gantt-links marker[id="gantt-arrow-critical"] path {
+  fill: var(--red);
+}
+
+.gantt-bar.is-critical {
+  border-color: var(--red);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--red) 35%, transparent);
+}
+
+.gantt-bar.is-critical::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 1px dashed color-mix(in srgb, var(--red) 45%, transparent);
+  border-radius: 7px;
+  pointer-events: none;
+}
+
 .gantt-row {
   display: flex;
   height: 41px;
@@ -1622,6 +1708,7 @@
 
 .gantt-bar {
   position: absolute;
+  z-index: 3;
   top: 9px;
   height: 23px;
   border-radius: 5px;

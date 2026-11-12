@@ -10,6 +10,7 @@ import {
   Clock,
   Copy,
   FileText,
+  GitBranch,
   Link2,
   ListPlus,
   MessageSquare,
@@ -17,6 +18,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Repeat,
   Send,
   Tag as TagIcon,
   Trash2,
@@ -76,6 +78,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   const [uploading, setUploading] = useState(false);
   const [contactDraft, setContactDraft] = useState('');
   const [addingContact, setAddingContact] = useState(false);
+  const [dependencyTasks, setDependencyTasks] = useState([]);
   const fileInputRef = useRef(null);
   const titleRef = useRef(null);
   const commentsEndRef = useRef(null);
@@ -83,6 +86,25 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
 
   const assignablePeople = bootstrap?.assignees || bootstrap?.members || [];
   const workspaceTags = bootstrap?.tags || [];
+  useEffect(() => {
+    if (!detail?.list?.id) {
+      setDependencyTasks([]);
+      return undefined;
+    }
+    let cancelled = false;
+    api
+      .get(`/lists/${detail.list.id}`)
+      .then((data) => {
+        if (!cancelled) setDependencyTasks((data.tasks || []).filter((task) => task.id !== detail.id));
+      })
+      .catch(() => {
+        if (!cancelled) setDependencyTasks([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail?.list?.id, detail?.id]);
+
   const progressEntries = useMemo(
     () =>
       [...(detail?.comments || [])].sort((a, b) =>
@@ -429,6 +451,14 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
     await patchTask({ participant_ids: [...current] });
   }
 
+  async function toggleDependency(dependencyId) {
+    if (!detail) return;
+    const current = new Set((detail.dependencies || []).map((dependency) => dependency.id));
+    if (current.has(dependencyId)) current.delete(dependencyId);
+    else current.add(dependencyId);
+    await patchTask({ dependency_ids: [...current] });
+  }
+
   async function addExternalAssignee(name, close) {
     const trimmed = String(name || '').trim();
     if (!trimmed || !detail) return;
@@ -677,6 +707,96 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                         </>
                       )}
                       <p className="participant-hint">参与人会收到任务上下文，但负责人仍然只有一位。</p>
+                    </Popover>
+
+                    <Popover
+                      width={290}
+                      trigger={
+                        <button type="button" className={`quick-pill ${detail.dependencies?.length ? '' : 'is-empty'}`}>
+                          <GitBranch size={15} />
+                          {detail.dependencies?.length ? `${detail.dependencies.length} 个前置` : '依赖'}
+                          <ChevronDown size={13} />
+                        </button>
+                      }
+                    >
+                      <div className="menu-label">前置任务（完成后才能开始）</div>
+                      {dependencyTasks.map((task) => {
+                        const active = detail.dependencies?.some((dependency) => dependency.id === task.id);
+                        return (
+                          <MenuItem
+                            key={task.id}
+                            active={active}
+                            icon={<span className="status-dot" style={{ background: task.status?.color || '#87909e' }} />}
+                            onClick={() => toggleDependency(task.id)}
+                          >
+                            <span className="dependency-option">
+                              {task.name}
+                              {task.status?.type === 'done' || task.status?.type === 'closed' ? <em>已完成</em> : null}
+                            </span>
+                          </MenuItem>
+                        );
+                      })}
+                      {!dependencyTasks.length && <p className="participant-hint">当前项目还没有其他任务。</p>}
+                      <p className="participant-hint">前置任务完成后，本任务才具备开始条件；系统会阻止循环依赖。</p>
+                    </Popover>
+
+                    <Popover
+                      width={260}
+                      trigger={
+                        <button type="button" className={`quick-pill ${detail.recurrence_frequency && detail.recurrence_frequency !== 'none' ? '' : 'is-empty'}`}>
+                          <Repeat size={15} />
+                          {detail.recurrence_frequency === 'daily'
+                            ? '每天重复'
+                            : detail.recurrence_frequency === 'weekly'
+                              ? '每周重复'
+                              : detail.recurrence_frequency === 'monthly'
+                                ? '每月重复'
+                                : '重复'}
+                          <ChevronDown size={13} />
+                        </button>
+                      }
+                    >
+                      <div className="menu-label">重复任务</div>
+                      {[
+                        { value: 'none', label: '不重复' },
+                        { value: 'daily', label: '每天' },
+                        { value: 'weekly', label: '每周' },
+                        { value: 'monthly', label: '每月' },
+                      ].map((option) => (
+                        <MenuItem
+                          key={option.value}
+                          active={(detail.recurrence_frequency || 'none') === option.value}
+                          onClick={() =>
+                            patchTask({
+                              recurrence_frequency: option.value,
+                              recurrence_interval: 1,
+                              recurrence_until: option.value === 'none' ? null : detail.recurrence_until || null,
+                            })
+                          }
+                        >
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                      {detail.recurrence_frequency && detail.recurrence_frequency !== 'none' && (
+                        <>
+                          <MenuDivider />
+                          <label className="date-field recurrence-until">
+                            <span>结束日期（可选）</span>
+                            <input
+                              type="date"
+                              value={detail.recurrence_until || ''}
+                              onChange={(event) =>
+                                patchTask({
+                                  recurrence_frequency: detail.recurrence_frequency,
+                                  recurrence_interval: detail.recurrence_interval || 1,
+                                  recurrence_until: event.target.value || null,
+                                })
+                              }
+                            />
+                          </label>
+                        </>
+                      )}
+                      <p className="participant-hint">完成当前任务后，会自动生成下一次任务；已完成的这次记录会保留。</p>
                     </Popover>
 
                     <Popover

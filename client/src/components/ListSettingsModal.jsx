@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, Zap } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { PROJECT_COLORS, colorInfo } from '../lib/colors.js';
@@ -22,7 +22,7 @@ const STATUS_TYPES = [
 ];
 
 export default function ListSettingsModal({ open, list, statuses, fields, onClose, onChanged }) {
-  const { toast } = useApp();
+  const { bootstrap, toast } = useApp();
   const [tab, setTab] = useState('status');
   const [busy, setBusy] = useState(false);
   const [editingStatus, setEditingStatus] = useState(null);
@@ -30,6 +30,10 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [fieldDraft, setFieldDraft] = useState(null);
   const [general, setGeneral] = useState(null);
+  const [automations, setAutomations] = useState([]);
+  const [automationDraft, setAutomationDraft] = useState(null);
+  const [automationBusy, setAutomationBusy] = useState(false);
+  const [deleteAutomationTarget, setDeleteAutomationTarget] = useState(null);
 
   useEffect(() => {
     if (open && list) {
@@ -44,10 +48,133 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
       setEditingStatus(null);
       setNewStatus(null);
       setFieldDraft(null);
+      setAutomationDraft(null);
+      setDeleteAutomationTarget(null);
+      api
+        .get(`/lists/${list.id}/automations`)
+        .then((data) => setAutomations(data.automations || []))
+        .catch(() => setAutomations([]));
     }
   }, [open, list?.id]);
 
   const sortedStatuses = useMemo(() => [...(statuses || [])], [statuses]);
+  const members = bootstrap?.members || [];
+  const tags = bootstrap?.tags || [];
+
+  const triggerLabel = (rule) => {
+    if (rule.trigger_type === 'task_created') return '任务创建时';
+    if (rule.trigger_type === 'task_completed') return '任务完成时';
+    const target = statuses?.find((status) => status.id === rule.trigger_config?.status_id);
+    return target ? `状态变更为「${target.name}」` : '任意状态变更';
+  };
+
+  const actionLabel = (rule) => {
+    if (rule.action_type === 'set_status') {
+      return `将状态改为「${statuses?.find((status) => status.id === rule.action_config?.status_id)?.name || '未知状态'}」`;
+    }
+    if (rule.action_type === 'set_assignee') {
+      const person = members.find((member) => member.id === rule.action_config?.assignee_id);
+      return person ? `指派给 ${person.name}` : '清除负责人';
+    }
+    if (rule.action_type === 'set_priority') {
+      return `设置优先级为「${['无', '紧急', '高', '普通', '低'][Number(rule.action_config?.priority) || 0] || '无'}」`;
+    }
+    return `添加标签「${tags.find((tag) => tag.id === rule.action_config?.tag_id)?.name || '未知标签'}」`;
+  };
+
+  function newAutomationDraft() {
+    setAutomationDraft({
+      id: null,
+      name: '',
+      trigger_type: 'status_changed',
+      triggerStatusId: statuses?.[0]?.id || '',
+      action_type: 'set_status',
+      actionStatusId: statuses?.[0]?.id || '',
+      actionAssigneeId: '',
+      actionPriority: 2,
+      actionTagId: tags[0]?.id || '',
+      enabled: true,
+    });
+  }
+
+  function editAutomation(rule) {
+    setAutomationDraft({
+      id: rule.id,
+      name: rule.name,
+      trigger_type: rule.trigger_type,
+      triggerStatusId: rule.trigger_config?.status_id || '',
+      action_type: rule.action_type,
+      actionStatusId: rule.action_config?.status_id || statuses?.[0]?.id || '',
+      actionAssigneeId: rule.action_config?.assignee_id || '',
+      actionPriority: Number(rule.action_config?.priority) || 0,
+      actionTagId: rule.action_config?.tag_id || tags[0]?.id || '',
+      enabled: rule.enabled,
+    });
+  }
+
+  async function reloadAutomations() {
+    if (!list?.id) return;
+    const data = await api.get(`/lists/${list.id}/automations`);
+    setAutomations(data.automations || []);
+  }
+
+  async function saveAutomation(event) {
+    event.preventDefault();
+    if (!automationDraft?.name?.trim()) return;
+    const trigger_config =
+      automationDraft.trigger_type === 'status_changed' && automationDraft.triggerStatusId
+        ? { status_id: automationDraft.triggerStatusId }
+        : {};
+    let action_config = {};
+    if (automationDraft.action_type === 'set_status') action_config = { status_id: automationDraft.actionStatusId };
+    if (automationDraft.action_type === 'set_assignee') action_config = { assignee_id: automationDraft.actionAssigneeId || null };
+    if (automationDraft.action_type === 'set_priority') action_config = { priority: Number(automationDraft.actionPriority) };
+    if (automationDraft.action_type === 'add_tag') action_config = { tag_id: automationDraft.actionTagId };
+    setAutomationBusy(true);
+    try {
+      const payload = {
+        name: automationDraft.name.trim(),
+        trigger_type: automationDraft.trigger_type,
+        trigger_config,
+        action_type: automationDraft.action_type,
+        action_config,
+        enabled: automationDraft.enabled,
+      };
+      if (automationDraft.id) await api.patch(`/automations/${automationDraft.id}`, payload);
+      else await api.post(`/lists/${list.id}/automations`, payload);
+      setAutomationDraft(null);
+      await reloadAutomations();
+      toast(automationDraft.id ? '自动化规则已更新' : '自动化规则已创建');
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setAutomationBusy(false);
+    }
+  }
+
+  async function toggleAutomation(rule) {
+    try {
+      await api.patch(`/automations/${rule.id}`, { enabled: !rule.enabled });
+      await reloadAutomations();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  }
+
+  async function removeAutomation() {
+    if (!deleteAutomationTarget) return;
+    setAutomationBusy(true);
+    try {
+      await api.delete(`/automations/${deleteAutomationTarget.id}`);
+      setDeleteAutomationTarget(null);
+      await reloadAutomations();
+      toast('自动化规则已删除');
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setAutomationBusy(false);
+    }
+  }
 
   async function saveStatus(status, patch) {
     setBusy(true);
@@ -165,6 +292,9 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
         <div className="settings-tabs">
           <button type="button" className={tab === 'status' ? 'is-active' : ''} onClick={() => setTab('status')}>工作流状态</button>
           <button type="button" className={tab === 'fields' ? 'is-active' : ''} onClick={() => setTab('fields')}>自定义字段</button>
+          <button type="button" className={tab === 'automations' ? 'is-active' : ''} onClick={() => setTab('automations')}>
+            自动化 <span className="settings-tab-count">{automations.length}</span>
+          </button>
           <button type="button" className={tab === 'general' ? 'is-active' : ''} onClick={() => setTab('general')}>列表信息</button>
         </div>
 
@@ -341,6 +471,190 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
           </div>
         )}
 
+        {tab === 'automations' && (
+          <div className="settings-pane">
+            <div className="automation-head">
+              <p className="settings-hint">当任务创建、完成或状态变化时自动执行一个动作。自动化不会重复触发自身。</p>
+              <button type="button" className="btn btn-primary btn-sm" onClick={newAutomationDraft}>
+                <Plus size={14} /> 新建规则
+              </button>
+            </div>
+
+            {automationDraft && (
+              <form className="automation-form" onSubmit={saveAutomation}>
+                <label className="field">
+                  <span className="field-label">规则名称</span>
+                  <input
+                    className="input"
+                    autoFocus
+                    value={automationDraft.name}
+                    onChange={(event) => setAutomationDraft({ ...automationDraft, name: event.target.value })}
+                    placeholder="例如：进入进行中后指派给负责人"
+                  />
+                </label>
+                <div className="form-grid-2">
+                  <label className="field">
+                    <span className="field-label">触发条件</span>
+                    <select
+                      className="input"
+                      value={automationDraft.trigger_type}
+                      onChange={(event) => setAutomationDraft({ ...automationDraft, trigger_type: event.target.value })}
+                    >
+                      <option value="task_created">任务创建时</option>
+                      <option value="status_changed">状态变更时</option>
+                      <option value="task_completed">任务完成时</option>
+                    </select>
+                  </label>
+                  {automationDraft.trigger_type === 'status_changed' ? (
+                    <label className="field">
+                      <span className="field-label">变更为</span>
+                      <select
+                        className="input"
+                        value={automationDraft.triggerStatusId}
+                        onChange={(event) => setAutomationDraft({ ...automationDraft, triggerStatusId: event.target.value })}
+                      >
+                        <option value="">任意状态</option>
+                        {sortedStatuses.map((status) => (
+                          <option key={status.id} value={status.id}>{status.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <div className="automation-trigger-note">
+                      {automationDraft.trigger_type === 'task_created' ? '每次创建任务时触发' : '任务进入完成/关闭状态时触发'}
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-grid-2">
+                  <label className="field">
+                    <span className="field-label">执行动作</span>
+                    <select
+                      className="input"
+                      value={automationDraft.action_type}
+                      onChange={(event) => setAutomationDraft({ ...automationDraft, action_type: event.target.value })}
+                    >
+                      <option value="set_status">修改状态</option>
+                      <option value="set_assignee">指派负责人</option>
+                      <option value="set_priority">设置优先级</option>
+                      <option value="add_tag">添加标签</option>
+                    </select>
+                  </label>
+                  {automationDraft.action_type === 'set_status' && (
+                    <label className="field">
+                      <span className="field-label">目标状态</span>
+                      <select
+                        className="input"
+                        value={automationDraft.actionStatusId}
+                        onChange={(event) => setAutomationDraft({ ...automationDraft, actionStatusId: event.target.value })}
+                      >
+                        {sortedStatuses.map((status) => (
+                          <option key={status.id} value={status.id}>{status.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {automationDraft.action_type === 'set_assignee' && (
+                    <label className="field">
+                      <span className="field-label">负责人</span>
+                      <select
+                        className="input"
+                        value={automationDraft.actionAssigneeId}
+                        onChange={(event) => setAutomationDraft({ ...automationDraft, actionAssigneeId: event.target.value })}
+                      >
+                        <option value="">清除负责人</option>
+                        {members.map((member) => (
+                          <option key={member.id} value={member.id}>{member.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {automationDraft.action_type === 'set_priority' && (
+                    <label className="field">
+                      <span className="field-label">优先级</span>
+                      <select
+                        className="input"
+                        value={automationDraft.actionPriority}
+                        onChange={(event) => setAutomationDraft({ ...automationDraft, actionPriority: Number(event.target.value) })}
+                      >
+                        <option value={1}>紧急</option>
+                        <option value={2}>高</option>
+                        <option value={3}>普通</option>
+                        <option value={4}>低</option>
+                        <option value={0}>无</option>
+                      </select>
+                    </label>
+                  )}
+                  {automationDraft.action_type === 'add_tag' && (
+                    <label className="field">
+                      <span className="field-label">标签</span>
+                      <select
+                        className="input"
+                        value={automationDraft.actionTagId}
+                        onChange={(event) => setAutomationDraft({ ...automationDraft, actionTagId: event.target.value })}
+                      >
+                        {tags.map((tag) => (
+                          <option key={tag.id} value={tag.id}>{tag.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+
+                <div className="automation-form-foot">
+                  <label className="automation-enabled">
+                    <input
+                      type="checkbox"
+                      checked={automationDraft.enabled}
+                      onChange={(event) => setAutomationDraft({ ...automationDraft, enabled: event.target.checked })}
+                    />
+                    启用规则
+                  </label>
+                  <div>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAutomationDraft(null)}>取消</button>
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={automationBusy || !automationDraft.name.trim()}>
+                      {automationBusy ? <Spinner size={13} /> : null} 保存规则
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            <div className="automation-list">
+              {automations.map((rule) => (
+                <div className={`automation-row ${rule.enabled ? '' : 'is-disabled'}`} key={rule.id}>
+                  <span className="automation-icon"><Zap size={14} /></span>
+                  <div className="automation-main">
+                    <strong>{rule.name}</strong>
+                    <span>{triggerLabel(rule)} → {actionLabel(rule)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className={`automation-toggle ${rule.enabled ? 'is-on' : ''}`}
+                    onClick={() => toggleAutomation(rule)}
+                    title={rule.enabled ? '停用规则' : '启用规则'}
+                  >
+                    <span />
+                  </button>
+                  <button type="button" className="icon-btn" onClick={() => editAutomation(rule)} title="编辑规则">
+                    <Pencil size={13} />
+                  </button>
+                  <button type="button" className="icon-btn icon-btn-danger" onClick={() => setDeleteAutomationTarget(rule)} title="删除规则">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+              {!automations.length && !automationDraft && (
+                <div className="automation-empty">
+                  <Zap size={20} />
+                  <p>还没有自动化规则。</p>
+                  <span>例如：任务进入「已完成」时，自动添加「本周交付」标签。</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {tab === 'general' && general && (
           <form className="settings-pane general-form" onSubmit={saveGeneral}>
             <label className="field">
@@ -424,6 +738,15 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
         busy={busy}
         onClose={() => setDeleteTarget(null)}
         onConfirm={removeTarget}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteAutomationTarget)}
+        title="删除自动化规则"
+        message={`确定删除「${deleteAutomationTarget?.name || ''}」吗？已产生的任务结果不会回滚。`}
+        busy={automationBusy}
+        onClose={() => setDeleteAutomationTarget(null)}
+        onConfirm={removeAutomation}
       />
     </>
   );

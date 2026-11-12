@@ -196,6 +196,11 @@ function buildTemplateSnapshot(listId) {
       .prepare('SELECT user_id FROM task_participants WHERE task_id = ?')
       .all(task.id)
       .map((row) => row.user_id);
+    const dependencyIndexes = db
+      .prepare('SELECT depends_on_task_id FROM task_dependencies WHERE task_id = ?')
+      .all(task.id)
+      .map((row) => indexByTaskId.get(row.depends_on_task_id))
+      .filter((value) => value !== undefined);
     return {
       index,
       parent_index: task.parent_id ? indexByTaskId.get(task.parent_id) ?? null : null,
@@ -211,6 +216,7 @@ function buildTemplateSnapshot(listId) {
       checklists: checklistData,
       field_values: fieldValueMap,
       participant_ids: participantIds,
+      dependency_indexes: dependencyIndexes,
     };
   });
   const milestones = db
@@ -388,10 +394,286 @@ function attachTaskMeta(tasks) {
     if (!tagsByTask.has(tag.task_id)) tagsByTask.set(tag.task_id, []);
     tagsByTask.get(tag.task_id).push({ id: tag.id, name: tag.name, color: tag.color });
   }
+  const dependencyRows = db
+    .prepare(
+      `SELECT task_id, depends_on_task_id FROM task_dependencies WHERE task_id IN (${placeholders})`
+    )
+    .all(...ids);
+  const dependenciesByTask = new Map();
+  for (const dependency of dependencyRows) {
+    if (!dependenciesByTask.has(dependency.task_id)) dependenciesByTask.set(dependency.task_id, []);
+    dependenciesByTask.get(dependency.task_id).push(dependency.depends_on_task_id);
+  }
   for (const task of tasks) {
     task.tags = tagsByTask.get(task.id) || [];
+    task.dependency_ids = dependenciesByTask.get(task.id) || [];
   }
   return tasks;
+}
+
+function normalizeDependencies(listId, taskId, dependencyIds) {
+  const db = getDb();
+  const ids = [...new Set((Array.isArray(dependencyIds) ? dependencyIds : []).filter(Boolean))];
+  if (!ids.length) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  const valid = db
+    .prepare(
+      `SELECT id FROM tasks WHERE list_id = ? AND archived = 0 AND parent_id IS NULL AND id IN (${placeholders})`
+    )
+    .all(listId, ...ids)
+    .map((row) => row.id);
+  if (valid.length !== ids.length) throw new Error('依赖任务必须属于当前项目');
+  if (valid.includes(taskId)) throw new Error('任务不能依赖自己');
+  const rows = db
+    .prepare(
+      `SELECT d.task_id, d.depends_on_task_id FROM task_dependencies d
+       JOIN tasks t ON t.id = d.task_id WHERE t.list_id = ?`
+    )
+    .all(listId);
+  const graph = new Map();
+  for (const row of rows) {
+    if (!graph.has(row.task_id)) graph.set(row.task_id, []);
+    graph.get(row.task_id).push(row.depends_on_task_id);
+  }
+  for (const dependencyId of valid) {
+    const stack = [dependencyId];
+    const seen = new Set();
+    while (stack.length) {
+      const current = stack.pop();
+      if (current === taskId) throw new Error('依赖关系会形成循环');
+      if (seen.has(current)) continue;
+      seen.add(current);
+      for (const next of graph.get(current) || []) stack.push(next);
+    }
+  }
+  return ids;
+}
+
+function parseJsonObject(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function serializeAutomationRule(row) {
+  return {
+    ...row,
+    trigger_config: parseJsonObject(row.trigger_config),
+    action_config: parseJsonObject(row.action_config),
+    enabled: Boolean(row.enabled),
+  };
+}
+
+function normalizeAutomationInput(list, body) {
+  const db = getDb();
+  const name = String(body?.name || '').trim();
+  if (!name) throw new Error('自动化名称不能为空');
+  const triggerType = String(body?.trigger_type || '');
+  if (!['task_created', 'status_changed', 'task_completed'].includes(triggerType)) {
+    throw new Error('自动化触发条件无效');
+  }
+  const actionType = String(body?.action_type || '');
+  if (!['set_status', 'set_assignee', 'set_priority', 'add_tag'].includes(actionType)) {
+    throw new Error('自动化动作无效');
+  }
+  const statuses = db.prepare('SELECT id FROM statuses WHERE list_id = ?').all(list.id);
+  const triggerConfig = {};
+  if (triggerType === 'status_changed' && body?.trigger_config?.status_id) {
+    const statusId = String(body.trigger_config.status_id);
+    if (!statuses.some((status) => status.id === statusId)) throw new Error('触发状态不属于当前列表');
+    triggerConfig.status_id = statusId;
+  }
+  const actionConfig = {};
+  if (actionType === 'set_status') {
+    const statusId = String(body?.action_config?.status_id || '');
+    if (!statuses.some((status) => status.id === statusId)) throw new Error('目标状态不属于当前列表');
+    actionConfig.status_id = statusId;
+  } else if (actionType === 'set_assignee') {
+    const assigneeId = body?.action_config?.assignee_id ? String(body.action_config.assignee_id) : null;
+    if (assigneeId && !isAssignable(list.workspace_id, assigneeId)) throw new Error('负责人不可用');
+    actionConfig.assignee_id = assigneeId;
+  } else if (actionType === 'set_priority') {
+    actionConfig.priority = Math.max(0, Math.min(4, Number(body?.action_config?.priority) || 0));
+  } else if (actionType === 'add_tag') {
+    const tagId = String(body?.action_config?.tag_id || '');
+    const tag = db.prepare('SELECT id FROM tags WHERE id = ? AND workspace_id = ?').get(tagId, list.workspace_id);
+    if (!tag) throw new Error('标签不属于当前工作空间');
+    actionConfig.tag_id = tagId;
+  }
+  return {
+    name,
+    trigger_type: triggerType,
+    trigger_config: triggerConfig,
+    action_type: actionType,
+    action_config: actionConfig,
+  };
+}
+
+function runAutomations(list, taskId, trigger, { fromStatusId, toStatusId, actorId = null } = {}) {
+  const db = getDb();
+  const rules = db
+    .prepare('SELECT * FROM automation_rules WHERE list_id = ? AND enabled = 1 ORDER BY created_at')
+    .all(list.id);
+  if (!rules.length) return 0;
+  const task = db
+    .prepare(
+      `SELECT t.*, st.type AS status_type FROM tasks t LEFT JOIN statuses st ON st.id = t.status_id WHERE t.id = ?`
+    )
+    .get(taskId);
+  if (!task) return 0;
+  let applied = 0;
+  for (const row of rules) {
+    const rule = serializeAutomationRule(row);
+    if (rule.trigger_type === 'status_changed') {
+      if (!toStatusId || toStatusId === fromStatusId) continue;
+      if (rule.trigger_config.status_id && rule.trigger_config.status_id !== toStatusId) continue;
+    } else if (rule.trigger_type === 'task_completed') {
+      if (!['done', 'closed'].includes(task.status_type)) continue;
+    } else if (rule.trigger_type === 'task_created') {
+      if (trigger !== 'task_created') continue;
+    }
+    if (rule.trigger_type !== trigger) continue;
+    let description = '';
+    if (rule.action_type === 'set_status') {
+      const status = db.prepare('SELECT * FROM statuses WHERE id = ? AND list_id = ?').get(rule.action_config.status_id, list.id);
+      if (!status) continue;
+      const completedAt = ['done', 'closed'].includes(status.type) ? new Date().toISOString() : null;
+      db.prepare('UPDATE tasks SET status_id = ?, completed_at = ?, updated_at = ? WHERE id = ?').run(
+        status.id,
+        completedAt,
+        new Date().toISOString(),
+        taskId
+      );
+      description = `将状态改为「${status.name}」`;
+    } else if (rule.action_type === 'set_assignee') {
+      const assigneeId = rule.action_config.assignee_id || null;
+      if (assigneeId && !isAssignable(list.workspace_id, assigneeId)) continue;
+      db.prepare('UPDATE tasks SET assignee_id = ?, updated_at = ? WHERE id = ?').run(
+        assigneeId,
+        new Date().toISOString(),
+        taskId
+      );
+      const person = assigneeId ? db.prepare('SELECT name FROM users WHERE id = ?').get(assigneeId) : null;
+      description = person ? `指派给 ${person.name}` : '清除负责人';
+    } else if (rule.action_type === 'set_priority') {
+      const priority = Math.max(0, Math.min(4, Number(rule.action_config.priority) || 0));
+      db.prepare('UPDATE tasks SET priority = ?, updated_at = ? WHERE id = ?').run(priority, new Date().toISOString(), taskId);
+      description = `设置优先级为「${PRIORITY_LABELS[priority] || '无'}」`;
+    } else if (rule.action_type === 'add_tag') {
+      const tag = db
+        .prepare('SELECT id, name FROM tags WHERE id = ? AND workspace_id = ?')
+        .get(rule.action_config.tag_id, list.workspace_id);
+      if (!tag) continue;
+      db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(taskId, tag.id);
+      description = `添加标签「${tag.name}」`;
+    }
+    applied += 1;
+    logActivity(list.workspace_id, taskId, actorId, 'automation', `自动化「${rule.name}」${description}`);
+  }
+  return applied;
+}
+
+function advanceRecurrenceDate(value, frequency, interval = 1) {
+  const date = dateFromKey(value);
+  if (!date) return null;
+  const step = Math.max(1, Number(interval) || 1);
+  if (frequency === 'daily') date.setDate(date.getDate() + step);
+  else if (frequency === 'weekly') date.setDate(date.getDate() + step * 7);
+  else if (frequency === 'monthly') date.setMonth(date.getMonth() + step);
+  else return null;
+  return localDateKey(date);
+}
+
+function createNextRecurringTask(taskId, list, actorId) {
+  const db = getDb();
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
+  if (!task || !['daily', 'weekly', 'monthly'].includes(task.recurrence_frequency)) return null;
+  const nextDue = advanceRecurrenceDate(
+    task.due_date || todayStr(),
+    task.recurrence_frequency,
+    task.recurrence_interval
+  );
+  if (!nextDue || (task.recurrence_until && nextDue > task.recurrence_until)) {
+    db.prepare("UPDATE tasks SET recurrence_frequency = 'none', recurrence_until = NULL WHERE id = ?").run(task.id);
+    return null;
+  }
+  const firstOpen = db
+    .prepare("SELECT id FROM statuses WHERE list_id = ? AND type = 'open' ORDER BY order_index LIMIT 1")
+    .get(task.list_id) || db.prepare('SELECT id FROM statuses WHERE list_id = ? ORDER BY order_index LIMIT 1').get(task.list_id);
+  if (!firstOpen) return null;
+  const now = new Date().toISOString();
+  const maxOrder = db.prepare('SELECT COALESCE(MAX(order_index), 0) AS max FROM tasks WHERE list_id = ?').get(task.list_id).max;
+  const id = randomId();
+  const oldStart = dateFromKey(task.start_date);
+  const oldDue = dateFromKey(task.due_date);
+  const duration = oldStart && oldDue ? Math.round((oldDue.getTime() - oldStart.getTime()) / 86400000) : null;
+  const startDate = duration !== null ? addDaysKey(nextDue, -duration) : null;
+  db.prepare(
+    `INSERT INTO tasks
+     (id, list_id, parent_id, name, description, status_id, priority, assignee_id, start_date, due_date,
+      time_estimate, order_index, created_by, created_at, updated_at, completed_at,
+      recurrence_frequency, recurrence_interval, recurrence_until)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).run(
+    id,
+    task.list_id,
+    null,
+    task.name,
+    task.description || '',
+    firstOpen.id,
+    task.priority || 0,
+    task.assignee_id,
+    startDate,
+    nextDue,
+    task.time_estimate,
+    maxOrder + 100,
+    actorId,
+    now,
+    now,
+    null,
+    task.recurrence_frequency,
+    task.recurrence_interval || 1,
+    task.recurrence_until
+  );
+  for (const tag of db.prepare('SELECT tag_id FROM task_tags WHERE task_id = ?').all(task.id)) {
+    db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(id, tag.tag_id);
+  }
+  for (const participant of db.prepare('SELECT user_id FROM task_participants WHERE task_id = ?').all(task.id)) {
+    db.prepare('INSERT OR IGNORE INTO task_participants (task_id, user_id, created_at) VALUES (?,?,?)').run(
+      id,
+      participant.user_id,
+      now
+    );
+  }
+  for (const value of db.prepare('SELECT field_id, value FROM task_field_values WHERE task_id = ?').all(task.id)) {
+    db.prepare('INSERT INTO task_field_values (task_id, field_id, value) VALUES (?,?,?)').run(id, value.field_id, value.value);
+  }
+  for (const checklist of db.prepare('SELECT * FROM checklists WHERE task_id = ?').all(task.id)) {
+    const checklistId = randomId();
+    db.prepare('INSERT INTO checklists (id, task_id, name, order_index) VALUES (?,?,?,?)').run(
+      checklistId,
+      id,
+      checklist.name,
+      checklist.order_index
+    );
+    for (const item of db.prepare('SELECT * FROM checklist_items WHERE checklist_id = ? ORDER BY order_index').all(checklist.id)) {
+      db.prepare('INSERT INTO checklist_items (id, checklist_id, name, done, order_index) VALUES (?,?,?,?,?)').run(
+        randomId(),
+        checklistId,
+        item.name,
+        0,
+        item.order_index
+      );
+    }
+  }
+  db.prepare("UPDATE tasks SET recurrence_frequency = 'none', recurrence_until = NULL WHERE id = ?").run(task.id);
+  logActivity(list.workspace_id, id, actorId, 'task_created', `根据重复任务「${task.name}」生成了下一次任务`);
+  return id;
 }
 
 function taskQuery(whereClause, orderClause = 't.order_index ASC') {
@@ -486,11 +768,29 @@ function loadTaskDetail(taskId, userId) {
     )
     .all(taskId)
     .map((participant) => ({ ...participant, is_external: contactIds.has(participant.id) }));
+  const dependencies = db
+    .prepare(
+      `SELECT u.id, u.name, u.due_date, u.status_id, st.name AS status_name, st.color AS status_color
+       FROM task_dependencies d JOIN tasks u ON u.id = d.depends_on_task_id
+       LEFT JOIN statuses st ON st.id = u.status_id
+       WHERE d.task_id = ? ORDER BY u.order_index`
+    )
+    .all(taskId);
+  const dependents = db
+    .prepare(
+      `SELECT u.id, u.name, u.due_date, u.status_id, st.name AS status_name, st.color AS status_color
+       FROM task_dependencies d JOIN tasks u ON u.id = d.task_id
+       LEFT JOIN statuses st ON st.id = u.status_id
+       WHERE d.depends_on_task_id = ? ORDER BY u.order_index`
+    )
+    .all(taskId);
   return {
     ...shaped,
     tags,
     statuses,
     participants,
+    dependencies,
+    dependents,
     list: {
       id: task.list_id,
       name: task.list_name,
@@ -1141,6 +1441,15 @@ export function createApiRouter() {
         );
       }
     }
+    if (['daily', 'weekly', 'monthly'].includes(body.recurrence_frequency)) {
+      db.prepare('UPDATE tasks SET recurrence_frequency = ?, recurrence_interval = ?, recurrence_until = ? WHERE id = ?').run(
+        body.recurrence_frequency,
+        Math.max(1, Number(body.recurrence_interval) || 1),
+        body.recurrence_until || null,
+        id
+      );
+    }
+    runAutomations(list, id, 'task_created', { actorId: req.user.id });
     logActivity(list.workspace_id, id, req.user.id, 'task_created', `创建了任务「${name}」`);
     res.status(201).json(loadTaskDetail(id, req.user.id));
   });
@@ -1155,6 +1464,14 @@ export function createApiRouter() {
     const statusRows = dbAny.prepare('SELECT * FROM statuses WHERE list_id = ?').all(existing.list_id);
     let completedAt = existing.completed_at;
     const messages = [];
+    let dependencyIds = null;
+    if (Array.isArray(body.dependency_ids)) {
+      try {
+        dependencyIds = normalizeDependencies(existing.list_id, existing.id, body.dependency_ids);
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
+    }
 
     if (typeof body.name === 'string' && body.name.trim() && body.name.trim() !== existing.name) {
       updates.push('name = ?');
@@ -1207,6 +1524,17 @@ export function createApiRouter() {
       updates.push('archived = ?');
       values.push(body.archived ? 1 : 0);
     }
+    if (body.recurrence_frequency !== undefined) {
+      const frequency = ['none', 'daily', 'weekly', 'monthly'].includes(body.recurrence_frequency)
+        ? body.recurrence_frequency
+        : 'none';
+      updates.push('recurrence_frequency = ?');
+      values.push(frequency);
+      updates.push('recurrence_interval = ?');
+      values.push(Math.max(1, Number(body.recurrence_interval) || 1));
+      updates.push('recurrence_until = ?');
+      values.push(body.recurrence_until || null);
+    }
     if (updates.length) {
       updates.push('updated_at = ?');
       values.push(new Date().toISOString());
@@ -1230,6 +1558,17 @@ export function createApiRouter() {
           .run(existing.id, participantId, now);
       }
     }
+    if (dependencyIds) {
+      dbAny.prepare('DELETE FROM task_dependencies WHERE task_id = ?').run(existing.id);
+      const now = new Date().toISOString();
+      for (const dependencyId of dependencyIds) {
+        dbAny
+          .prepare('INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_task_id, created_at) VALUES (?,?,?)')
+          .run(existing.id, dependencyId, now);
+      }
+      dbAny.prepare('UPDATE tasks SET updated_at = ? WHERE id = ?').run(now, existing.id);
+      messages.push('更新了任务依赖');
+    }
     if (body.fields && typeof body.fields === 'object') {
       for (const [fieldId, value] of Object.entries(body.fields)) {
         const field = dbAny.prepare('SELECT id FROM custom_fields WHERE id = ? AND list_id = ?').get(fieldId, existing.list_id);
@@ -1245,6 +1584,28 @@ export function createApiRouter() {
             .run(existing.id, fieldId, String(value));
         }
       }
+    }
+    const updatedStatus = dbAny
+      .prepare('SELECT status_id FROM tasks WHERE id = ?')
+      .get(existing.id);
+    const oldStatus = statusRows.find((status) => status.id === existing.status_id);
+    const newStatus = statusRows.find((status) => status.id === updatedStatus?.status_id);
+    const statusChanged = Boolean(newStatus && existing.status_id !== newStatus.id);
+    const becameDone =
+      Boolean(newStatus && oldStatus) &&
+      ['done', 'closed'].includes(newStatus.type) &&
+      !['done', 'closed'].includes(oldStatus.type);
+    const listRef = { id: existing.list_id, workspace_id: existing.workspace_id };
+    if (statusChanged) {
+      runAutomations(listRef, existing.id, 'status_changed', {
+        fromStatusId: existing.status_id,
+        toStatusId: newStatus.id,
+        actorId: req.user.id,
+      });
+    }
+    if (becameDone) {
+      runAutomations(listRef, existing.id, 'task_completed', { actorId: req.user.id });
+      createNextRecurringTask(existing.id, listRef, req.user.id);
     }
     if (messages.length) {
       logActivity(existing.workspace_id, existing.id, req.user.id, 'task_updated', messages[0]);
@@ -1277,6 +1638,9 @@ export function createApiRouter() {
       new Date().toISOString(),
       existing.id
     );
+    const oldStatus = db.prepare('SELECT * FROM statuses WHERE id = ?').get(existing.status_id);
+    const becameDone =
+      ['done', 'closed'].includes(status.type) && !['done', 'closed'].includes(oldStatus?.type);
     if (statusId !== existing.status_id) {
       logActivity(
         existing.workspace_id,
@@ -1285,6 +1649,18 @@ export function createApiRouter() {
         'task_updated',
         `将状态改为「${status.name}」`
       );
+    }
+    const listRef = { id: existing.list_id, workspace_id: existing.workspace_id };
+    if (statusId !== existing.status_id) {
+      runAutomations(listRef, existing.id, 'status_changed', {
+        fromStatusId: existing.status_id,
+        toStatusId: statusId,
+        actorId: req.user.id,
+      });
+    }
+    if (becameDone) {
+      runAutomations(listRef, existing.id, 'task_completed', { actorId: req.user.id });
+      createNextRecurringTask(existing.id, listRef, req.user.id);
     }
     res.json({ ok: true });
   });
@@ -1527,7 +1903,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.6.0',
+      version: '1.7.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -2006,6 +2382,97 @@ export function createApiRouter() {
     }
     ids.forEach((id, index) => db.prepare('UPDATE statuses SET order_index = ? WHERE id = ?').run(index, id));
     res.json(db.prepare('SELECT * FROM statuses WHERE list_id = ? ORDER BY order_index').all(list.id));
+  });
+
+  router.get('/lists/:id/automations', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const rules = db
+      .prepare('SELECT * FROM automation_rules WHERE list_id = ? ORDER BY created_at')
+      .all(list.id)
+      .map(serializeAutomationRule);
+    res.json({ automations: rules });
+  });
+
+  router.post('/lists/:id/automations', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    try {
+      const normalized = normalizeAutomationInput(list, req.body || {});
+      const id = randomId();
+      const now = new Date().toISOString();
+      db.prepare(
+        `INSERT INTO automation_rules
+         (id, list_id, name, trigger_type, trigger_config, action_type, action_config, enabled, created_by, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+      ).run(
+        id,
+        list.id,
+        normalized.name,
+        normalized.trigger_type,
+        JSON.stringify(normalized.trigger_config),
+        normalized.action_type,
+        JSON.stringify(normalized.action_config),
+        req.body?.enabled === false ? 0 : 1,
+        req.user.id,
+        now,
+        now
+      );
+      res.status(201).json(serializeAutomationRule(db.prepare('SELECT * FROM automation_rules WHERE id = ?').get(id)));
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  router.patch('/automations/:id', (req, res) => {
+    const rule = db
+      .prepare(
+        `SELECT a.*, l.workspace_id FROM automation_rules a JOIN lists l ON l.id = a.list_id
+         JOIN spaces s ON s.id = l.space_id JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = ?
+         WHERE a.id = ?`
+      )
+      .get(req.user.id, req.params.id);
+    if (!rule) return res.status(404).json({ error: '自动化规则不存在' });
+    const list = accessibleList(rule.list_id, req.user.id);
+    try {
+      const current = serializeAutomationRule(rule);
+      const normalized = normalizeAutomationInput(list, {
+        name: req.body?.name ?? current.name,
+        trigger_type: req.body?.trigger_type ?? current.trigger_type,
+        trigger_config: req.body?.trigger_config ?? current.trigger_config,
+        action_type: req.body?.action_type ?? current.action_type,
+        action_config: req.body?.action_config ?? current.action_config,
+      });
+      db.prepare(
+        `UPDATE automation_rules SET name = ?, trigger_type = ?, trigger_config = ?, action_type = ?,
+         action_config = ?, enabled = ?, updated_at = ? WHERE id = ?`
+      ).run(
+        normalized.name,
+        normalized.trigger_type,
+        JSON.stringify(normalized.trigger_config),
+        normalized.action_type,
+        JSON.stringify(normalized.action_config),
+        req.body?.enabled !== undefined ? (req.body.enabled ? 1 : 0) : rule.enabled,
+        new Date().toISOString(),
+        rule.id
+      );
+      res.json(serializeAutomationRule(db.prepare('SELECT * FROM automation_rules WHERE id = ?').get(rule.id)));
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  router.delete('/automations/:id', (req, res) => {
+    const rule = db
+      .prepare(
+        `SELECT a.*, l.workspace_id FROM automation_rules a JOIN lists l ON l.id = a.list_id
+         JOIN spaces s ON s.id = l.space_id JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = ?
+         WHERE a.id = ?`
+      )
+      .get(req.user.id, req.params.id);
+    if (!rule) return res.status(404).json({ error: '自动化规则不存在' });
+    db.prepare('DELETE FROM automation_rules WHERE id = ?').run(rule.id);
+    res.json({ ok: true });
   });
 
   router.post('/lists/:id/fields', (req, res) => {
@@ -2582,6 +3049,19 @@ export function createApiRouter() {
               index
             );
           });
+        }
+      }
+
+      for (const task of taskTemplates) {
+        const taskId = taskIdByIndex.get(task.index);
+        if (!taskId) continue;
+        for (const dependencyIndex of Array.isArray(task.dependency_indexes) ? task.dependency_indexes : []) {
+          const dependencyId = taskIdByIndex.get(dependencyIndex);
+          if (dependencyId && dependencyId !== taskId) {
+            db.prepare(
+              'INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_task_id, created_at) VALUES (?,?,?)'
+            ).run(taskId, dependencyId, now);
+          }
         }
       }
 
