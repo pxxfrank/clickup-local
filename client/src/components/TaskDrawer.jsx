@@ -32,6 +32,7 @@ import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { formatDate, formatDateSmart, formatBytes, formatDateTime, parseDateValue } from '../lib/date.js';
 import { renderMarkdown } from '../lib/markdown.js';
+import DependencyGraphModal from './DependencyGraphModal.jsx';
 import {
   Avatar,
   ConfirmDialog,
@@ -79,6 +80,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   const [contactDraft, setContactDraft] = useState('');
   const [addingContact, setAddingContact] = useState(false);
   const [dependencyTasks, setDependencyTasks] = useState([]);
+  const [dependencyGraphOpen, setDependencyGraphOpen] = useState(false);
   const fileInputRef = useRef(null);
   const titleRef = useRef(null);
   const commentsEndRef = useRef(null);
@@ -452,11 +454,11 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   }
 
   async function toggleDependency(dependencyId) {
-    if (!detail) return;
+    if (!detail) return null;
     const current = new Set((detail.dependencies || []).map((dependency) => dependency.id));
     if (current.has(dependencyId)) current.delete(dependencyId);
     else current.add(dependencyId);
-    await patchTask({ dependency_ids: [...current] });
+    return patchTask({ dependency_ids: [...current] });
   }
 
   async function addExternalAssignee(name, close) {
@@ -709,36 +711,15 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                       <p className="participant-hint">参与人会收到任务上下文，但负责人仍然只有一位。</p>
                     </Popover>
 
-                    <Popover
-                      width={290}
-                      trigger={
-                        <button type="button" className={`quick-pill ${detail.dependencies?.length ? '' : 'is-empty'}`}>
-                          <GitBranch size={15} />
-                          {detail.dependencies?.length ? `${detail.dependencies.length} 个前置` : '依赖'}
-                          <ChevronDown size={13} />
-                        </button>
-                      }
+                    <button
+                      type="button"
+                      className={`quick-pill ${detail.dependencies?.length ? '' : 'is-empty'}`}
+                      onClick={() => setDependencyGraphOpen(true)}
                     >
-                      <div className="menu-label">前置任务（完成后才能开始）</div>
-                      {dependencyTasks.map((task) => {
-                        const active = detail.dependencies?.some((dependency) => dependency.id === task.id);
-                        return (
-                          <MenuItem
-                            key={task.id}
-                            active={active}
-                            icon={<span className="status-dot" style={{ background: task.status?.color || '#87909e' }} />}
-                            onClick={() => toggleDependency(task.id)}
-                          >
-                            <span className="dependency-option">
-                              {task.name}
-                              {task.status?.type === 'done' || task.status?.type === 'closed' ? <em>已完成</em> : null}
-                            </span>
-                          </MenuItem>
-                        );
-                      })}
-                      {!dependencyTasks.length && <p className="participant-hint">当前项目还没有其他任务。</p>}
-                      <p className="participant-hint">前置任务完成后，本任务才具备开始条件；系统会阻止循环依赖。</p>
-                    </Popover>
+                      <GitBranch size={15} />
+                      {detail.dependencies?.length ? `依赖关系 ${detail.dependencies.length}` : '依赖关系'}
+                      <ChevronDown size={13} />
+                    </button>
 
                     <Popover
                       width={260}
@@ -1320,6 +1301,14 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
           ) : null}
         </aside>
       </div>
+
+      <DependencyGraphModal
+        open={dependencyGraphOpen}
+        onClose={() => setDependencyGraphOpen(false)}
+        task={detail}
+        tasks={dependencyTasks}
+        onToggleDependency={toggleDependency}
+      />
 
       <ConfirmDialog
         open={deleteOpen}
