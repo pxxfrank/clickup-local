@@ -27,7 +27,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, name: 'ClickUp Local', version: '1.4.1', time: new Date().toISOString() });
+  res.json({ ok: true, name: 'ClickUp Local', version: '1.4.2', time: new Date().toISOString() });
 });
 
 const authRouter = express.Router();

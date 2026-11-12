@@ -19,11 +19,11 @@ import { addDays, addMonths, dueTone, format, formatDateSmart, parseDateValue, s
 import { ConfirmDialog, Modal, ProgressBar, Spinner } from './ui.jsx';
 
 const PHASE_COLORS = ['#7B68EE', '#4A9EFF', '#2EA44F', '#F59E0B', '#F06A6A', '#EC4899'];
-const TIMELINE_CARD_WIDTH = 196;
-const TIMELINE_CARD_HEIGHT = 116;
-const TIMELINE_GUTTER = 112;
-const TIMELINE_PHASE_LANE = 54;
-const TIMELINE_MS_GAP = 14;
+const TIMELINE_CARD_WIDTH = 168;
+const TIMELINE_CARD_HEIGHT = 88;
+const TIMELINE_GUTTER = 96;
+const TIMELINE_PHASE_LANE = 52;
+const TIMELINE_MS_GAP = 12;
 
 function emptyMilestoneForm(listColor) {
   return {
@@ -157,16 +157,7 @@ export default function ProjectOverview({
     if (dayDistance(start, end) < 21) end = addDays(start, 21);
     const totalDays = dayDistance(start, end) + 1;
 
-    const milestoneTimes = sortedMilestones
-      .map((milestone) => parseDateValue(milestone.due_date)?.getTime())
-      .filter((value) => value !== undefined)
-      .sort((a, b) => a - b);
-    let minGap = 14;
-    for (let index = 1; index < milestoneTimes.length; index += 1) {
-      const gap = Math.round((milestoneTimes[index] - milestoneTimes[index - 1]) / 86400000);
-      if (gap > 0) minGap = Math.min(minGap, gap);
-    }
-    const pxPerDay = Math.max(16, Math.min(64, Math.ceil(200 / Math.max(1, minGap))));
+    const pxPerDay = Math.max(10, Math.min(30, Math.ceil(960 / Math.max(1, totalDays))));
     const xForDate = (value) => TIMELINE_GUTTER + dayDistance(start, value) * pxPerDay;
     const width = Math.max(820, totalDays * pxPerDay + TIMELINE_GUTTER * 2);
 
@@ -221,6 +212,8 @@ export default function ProjectOverview({
 
     if (!milestoneBlocks.length) return null;
     const axisY = cardsTop + milestoneLanes.length * (TIMELINE_CARD_HEIGHT + TIMELINE_MS_GAP) + 4;
+    const dateAreaTop = axisY + 13;
+    const monthLabelTop = dateAreaTop + milestoneLanes.length * 14 + 22;
     const monthTicks = [];
     let cursor = startOfMonth(start);
     while (cursor <= end) {
@@ -233,13 +226,14 @@ export default function ProjectOverview({
     const todayInRange = todayDate >= start && todayDate <= end;
     return {
       width,
-      height: axisY + 62,
+      height: monthLabelTop + 24,
       axisY,
       cardsTop,
       phaseHeight,
       phaseBlocks,
       milestoneBlocks,
       monthTicks,
+      monthLabelTop,
       todayX: todayInRange ? xForDate(today) : null,
     };
   }, [sortedMilestones, sortedPhases]);
@@ -447,7 +441,7 @@ export default function ProjectOverview({
               {timeline.monthTicks.map((tick) => (
                 <div className="timeline-month" key={`${tick.x}-${tick.label}`}>
                   <span className="timeline-month-line" style={{ left: tick.x, height: timeline.axisY }} />
-                  <span className="timeline-month-label" style={{ left: tick.x, top: timeline.axisY + 35 }}>
+                  <span className="timeline-month-label" style={{ left: tick.x, top: timeline.monthLabelTop }}>
                     {tick.label}
                   </span>
                 </div>
@@ -493,7 +487,7 @@ export default function ProjectOverview({
 
               <div className="timeline-axis" style={{ top: timeline.axisY }} />
 
-              {timeline.milestoneBlocks.map(({ milestone, left, top, phase }) => {
+              {timeline.milestoneBlocks.map(({ milestone, left, top, lane, phase }) => {
                 const days = differenceInDays(milestone.due_date);
                 const overdue = !milestone.completed && days < 0;
                 const soon = !milestone.completed && days >= 0 && days <= 7;
@@ -541,7 +535,7 @@ export default function ProjectOverview({
                     >
                       {milestone.completed ? <Check size={11} /> : null}
                     </button>
-                    <div className="timeline-ms-date" style={{ top: timeline.axisY - top + 13 }}>
+                    <div className="timeline-ms-date" style={{ top: timeline.axisY - top + 13 + lane * 14 }}>
                       <strong>{formatDateSmart(milestone.due_date)}</strong>
                       <span>{format(parseDateValue(milestone.due_date), 'EEEEEE', { locale: zhCN })}</span>
                       {phase && <em style={{ color: phase.color }}>{phase.name}</em>}
