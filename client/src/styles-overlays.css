@@ -785,6 +785,35 @@
   color: var(--muted-2);
 }
 
+.progress-section-head {
+  justify-content: space-between;
+}
+
+.progress-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  background: #fff;
+}
+
+.progress-sort-btn:hover {
+  border-color: var(--line-strong);
+  color: var(--brand-strong);
+  background: var(--brand-soft);
+}
+
+.progress-time {
+  font-family: var(--mono);
+  font-size: 9px !important;
+  letter-spacing: -0.1px;
+}
+
 .comment-delete {
   margin-left: auto;
   color: var(--muted-2);

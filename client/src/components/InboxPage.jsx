@@ -27,7 +27,7 @@ const TYPE_META = {
   task_created: { icon: Plus, color: '#7B68EE', label: '任务' },
   task_updated: { icon: RefreshCw, color: '#4A9EFF', label: '更新' },
   task_deleted: { icon: Trash2, color: '#E5484D', label: '删除' },
-  comment: { icon: MessageSquare, color: '#F59E0B', label: '评论' },
+  comment: { icon: MessageSquare, color: '#F59E0B', label: '进展' },
   attachment: { icon: Paperclip, color: '#26C6DA', label: '附件' },
   member_joined: { icon: UserPlus, color: '#2EA44F', label: '成员' },
   workspace_created: { icon: Sparkles, color: '#A25DDC', label: '空间' },
@@ -48,7 +48,7 @@ const TYPE_META = {
 const FILTERS = [
   { value: 'all', label: '全部动态' },
   { value: 'task', label: '任务' },
-  { value: 'comment', label: '评论' },
+  { value: 'comment', label: '进展' },
   { value: 'member', label: '成员与空间' },
 ];
 
@@ -138,7 +138,7 @@ export default function InboxPage() {
         <div>
           <span className="eyebrow-plain"><Bell size={14} /> 收件箱</span>
           <h1>工作空间动态</h1>
-          <p>任务、评论和团队变更都会汇总在这里。</p>
+          <p>任务、进展和团队变更都会汇总在这里。</p>
         </div>
         <div className="inbox-head-actions">
           <button
@@ -208,7 +208,7 @@ export default function InboxPage() {
             <EmptyState
               icon={<AtSign size={24} />}
               title="这里很安静"
-              description="当团队创建任务、发表评论或加入空间时，动态会出现在这里。"
+              description="当团队创建任务、记录进展或加入空间时，动态会出现在这里。"
               action={<button type="button" className="btn btn-primary btn-sm" onClick={() => navigate('/home')}>返回主页</button>}
             />
           )}

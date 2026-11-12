@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
+import { PROJECT_COLORS, colorInfo } from '../lib/colors.js';
 import { ConfirmDialog, Modal, Spinner } from './ui.jsx';
 
 const STATUS_COLORS = ['#87909e', '#4a9eff', '#a25ddc', '#f59e0b', '#2ea44f', '#e5484d', '#26c6da', '#6b7280'];
-const LIST_COLORS = ['#7B68EE', '#4A9EFF', '#26C6DA', '#2EA44F', '#F59E0B', '#FF8A65', '#E5484D', '#A25DDC'];
 const LIST_ICONS = ['📋', '🏃', '🐞', '📄', '💻', '🎨', '🔬', '✍️', '🎪', '📈', '🤝', '👋', '📌', '🧪'];
 const FIELD_TYPES = [
   { value: 'text', label: '文本' },
@@ -383,18 +383,26 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
               </div>
             </div>
             <div className="field">
-              <span className="field-label">颜色</span>
+              <span className="field-label">识别色</span>
               <div className="color-picker">
-                {LIST_COLORS.map((color) => (
+                {PROJECT_COLORS.map((color) => (
                   <button
                     type="button"
-                    key={color}
-                    className={`color-option ${general.color === color ? 'is-active' : ''}`}
-                    style={{ background: color }}
-                    onClick={() => setGeneral({ ...general, color })}
+                    key={color.value}
+                    className={`color-option ${general.color === color.value ? 'is-active' : ''}`}
+                    style={{ background: color.value }}
+                    onClick={() => setGeneral({ ...general, color: color.value })}
+                    aria-label={`${color.name} · ${color.meaning}`}
+                    title={`${color.name} · ${color.meaning}`}
                   />
                 ))}
               </div>
+              <p className="color-meaning">
+                <span style={{ background: general.color }} />
+                <strong>{colorInfo(general.color).name}</strong>
+                <em>· {colorInfo(general.color).meaning} ·</em>
+                会应用到侧边栏、列表头部、项目概览和完成度进度条。
+              </p>
             </div>
             <div className="settings-footer-row">
               <button type="submit" className="btn btn-primary" disabled={busy}>

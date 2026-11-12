@@ -265,7 +265,16 @@ export default function ProjectOverview({
     <div className="project-overview">
       <section className="overview-hero">
         <div className="overview-hero-main">
-          <span className="overview-icon" style={{ background: `${list.color}1a` }}>{list.icon || '📋'}</span>
+          <span
+            className="overview-icon"
+            style={{
+              background: `${list.color}26`,
+              border: `1px solid ${list.color}55`,
+              boxShadow: `inset 0 -3px 0 ${list.color}`,
+            }}
+          >
+            {list.icon || '📋'}
+          </span>
           <div>
             <span className="eyebrow-plain">PROJECT OVERVIEW</span>
             <h2>{list.name}</h2>

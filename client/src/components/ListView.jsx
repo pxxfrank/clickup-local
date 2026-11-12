@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
   CircleDashed,
+  GripVertical,
   ListTree,
   MessageSquare,
   Plus,
@@ -200,18 +201,63 @@ function StatusControl({ task, statuses, onUpdate }) {
   );
 }
 
-function TaskRow({ task, statuses, members, onOpen, onComplete, onUpdate, showStatus }) {
+function TaskRow({
+  task,
+  statuses,
+  members,
+  onOpen,
+  onComplete,
+  onUpdate,
+  showStatus,
+  draggable,
+  dragging,
+  dropBefore,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+}) {
   const completed = task.status?.type === 'done' || task.status?.type === 'closed';
   return (
     <div
-      className={`task-row ${completed ? 'is-completed' : ''}`}
+      className={`task-row ${completed ? 'is-completed' : ''} ${dragging ? 'is-dragging' : ''} ${dropBefore ? 'is-drop-before' : ''}`}
       onClick={() => onOpen(task.id)}
       role="button"
       tabIndex={0}
+      draggable={Boolean(draggable)}
+      onDragStart={(event) => {
+        if (!draggable) return;
+        const target = event.target;
+        if (target.closest?.('button, input, textarea, select, a')) {
+          event.preventDefault();
+          return;
+        }
+        event.dataTransfer.setData('text/plain', task.id);
+        event.dataTransfer.effectAllowed = 'move';
+        onDragStart?.(task);
+      }}
+      onDragEnd={() => onDragEnd?.()}
+      onDragOver={(event) => {
+        if (!draggable) return;
+        onDragOver?.(event, task);
+      }}
+      onDrop={(event) => {
+        if (!draggable) return;
+        onDrop?.(event);
+      }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') onOpen(task.id);
       }}
     >
+      {draggable && (
+        <span
+          className="task-drag-handle"
+          title="拖拽调整状态和顺序"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <GripVertical size={13} />
+        </span>
+      )}
       <button
         type="button"
         className={`task-check ${completed ? 'is-checked' : ''}`}
@@ -241,7 +287,7 @@ function TaskRow({ task, statuses, members, onOpen, onComplete, onUpdate, showSt
               <span><Users size={12} /> {task.participant_count} 位参与人</span>
             )}
             {task.comment_count > 0 && (
-              <span><MessageSquare size={12} /> {task.comment_count}</span>
+              <span title="进展"><MessageSquare size={12} /> {task.comment_count}</span>
             )}
             {task.checklist_total > 0 && (
               <span className="task-checklist-mini">
@@ -359,8 +405,30 @@ function GroupHeader({ group, collapsed, onToggle, onAdd }) {
   );
 }
 
-export default function ListView({ groups, statuses, members, onOpenTask, onComplete, onUpdateTask, onAddTask }) {
+export default function ListView({
+  groups,
+  statuses,
+  members,
+  onOpenTask,
+  onComplete,
+  onUpdateTask,
+  onAddTask,
+  onMoveTask,
+  canReorder = false,
+}) {
   const [collapsed, setCollapsed] = useState(() => new Set());
+  const [dragId, setDragId] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null);
+
+  useEffect(() => {
+    if (!dragId) return undefined;
+    function resetDrag() {
+      setDragId(null);
+      setDropTarget(null);
+    }
+    document.addEventListener('dragend', resetDrag);
+    return () => document.removeEventListener('dragend', resetDrag);
+  }, [dragId]);
 
   function toggleGroup(key) {
     setCollapsed((current) => {
@@ -371,12 +439,60 @@ export default function ListView({ groups, statuses, members, onOpenTask, onComp
     });
   }
 
+  function resetDrag() {
+    setDragId(null);
+    setDropTarget(null);
+  }
+
+  function handleDragStart(task) {
+    if (!canReorder) return;
+    setDragId(task.id);
+    setDropTarget(null);
+  }
+
+  function handleRowDragOver(event, group, index) {
+    if (!dragId || !group.status) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    const rect = event.currentTarget.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+    setDropTarget({ statusId: group.status.id, index: index + (before ? 0 : 1) });
+  }
+
+  function handleGroupDragOver(event, group) {
+    if (!dragId || !group.status) return;
+    if (event.target.closest?.('.task-row')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget({ statusId: group.status.id, index: group.tasks.length });
+  }
+
+  function handleDrop(event, group) {
+    if (!dragId || !group.status || !dropTarget || dropTarget.statusId !== group.status.id) {
+      resetDrag();
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const remaining = group.tasks.filter((task) => task.id !== dragId);
+    let index = dropTarget.index;
+    const sourceIndex = group.tasks.findIndex((task) => task.id === dragId);
+    if (sourceIndex !== -1 && sourceIndex < index) index -= 1;
+    index = Math.max(0, Math.min(index, remaining.length));
+    const taskId = dragId;
+    resetDrag();
+    onMoveTask?.(taskId, group.status.id, index);
+  }
+
   return (
     <div className="list-view">
       {groups.map((group) => {
         const isCollapsed = collapsed.has(group.key);
+        const dragOverGroup = dropTarget?.statusId === group.status?.id;
+        const rowsDraggable = canReorder && group.kind === 'status';
         return (
-          <section className="task-group" key={group.key}>
+          <section className={`task-group ${dragOverGroup ? 'is-drag-target' : ''}`} key={group.key}>
             <GroupHeader
               group={group}
               collapsed={isCollapsed}
@@ -384,8 +500,12 @@ export default function ListView({ groups, statuses, members, onOpenTask, onComp
               onAdd={() => onAddTask(group.status?.id || statuses[0]?.id)}
             />
             {!isCollapsed && (
-              <div className="task-group-body">
-                {group.tasks.map((task) => (
+              <div
+                className="task-group-body"
+                onDragOver={(event) => handleGroupDragOver(event, group)}
+                onDrop={(event) => handleDrop(event, group)}
+              >
+                {group.tasks.map((task, index) => (
                   <TaskRow
                     key={task.id}
                     task={task}
@@ -395,8 +515,18 @@ export default function ListView({ groups, statuses, members, onOpenTask, onComp
                     onComplete={onComplete}
                     onUpdate={onUpdateTask}
                     showStatus={group.kind !== 'status'}
+                    draggable={rowsDraggable}
+                    dragging={dragId === task.id}
+                    dropBefore={dragOverGroup && dropTarget.index === index}
+                    onDragStart={handleDragStart}
+                    onDragEnd={resetDrag}
+                    onDragOver={(event) => handleRowDragOver(event, group, index)}
+                    onDrop={(event) => handleDrop(event, group)}
                   />
                 ))}
+                {dragOverGroup && dropTarget.index >= group.tasks.length && (
+                  <div className="task-drop-line" aria-hidden="true" />
+                )}
                 <InlineAdd
                   onAdd={(name) =>
                     onAddTask(group.status?.id || statuses[0]?.id, name)

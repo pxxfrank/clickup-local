@@ -825,7 +825,7 @@ export function createApiRouter() {
     const existing = accessibleTask(req.params.id, req.user.id);
     if (!existing) return res.status(404).json({ error: '任务不存在' });
     const text = String(req.body?.body || '').trim();
-    if (!text) return res.status(400).json({ error: '评论内容不能为空' });
+    if (!text) return res.status(400).json({ error: '进展内容不能为空' });
     const id = randomId();
     const now = new Date().toISOString();
     db.prepare('INSERT INTO comments (id, task_id, user_id, body, created_at) VALUES (?,?,?,?,?)').run(
@@ -835,7 +835,7 @@ export function createApiRouter() {
       text,
       now
     );
-    logActivity(existing.workspace_id, existing.id, req.user.id, 'comment', `在「${existing.name}」中发表了评论`);
+    logActivity(existing.workspace_id, existing.id, req.user.id, 'comment', `在「${existing.name}」中记录了进展`);
     res.status(201).json({
       id,
       task_id: existing.id,
@@ -854,10 +854,10 @@ export function createApiRouter() {
          JOIN lists l ON l.id = t.list_id JOIN spaces s ON s.id = l.space_id WHERE c.id = ?`
       )
       .get(req.params.id);
-    if (!comment) return res.status(404).json({ error: '评论不存在' });
+    if (!comment) return res.status(404).json({ error: '进展不存在' });
     const role = workspaceRole(comment.workspace_id, req.user.id);
     if (comment.user_id !== req.user.id && role !== 'owner' && role !== 'admin') {
-      return res.status(403).json({ error: '没有权限删除此评论' });
+      return res.status(403).json({ error: '没有权限删除此进展' });
     }
     db.prepare('DELETE FROM comments WHERE id = ?').run(comment.id);
     res.json({ ok: true });
@@ -1035,7 +1035,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.3.0',
+      version: '1.4.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,

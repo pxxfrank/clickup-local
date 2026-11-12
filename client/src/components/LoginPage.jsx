@@ -5,7 +5,7 @@ import { Logo, LogoMark, Spinner } from './ui.jsx';
 
 const FEATURES = [
   '列表、看板、日历、甘特图四种视图',
-  '任务、子任务、检查项与评论协作',
+  '任务、子任务、检查项与进展协作',
   '本地 SQLite 存储，数据留在你的电脑',
 ];
 
@@ -162,7 +162,7 @@ export default function LoginPage({ onAuthenticated }) {
             <span className="mock-avatar" style={{ background: '#FF8A65' }}>苏</span>
             <div>
               <strong>苏晴</strong>
-              <span>评论了「客户案例」</span>
+              <span>记录了「客户案例」的进展</span>
             </div>
           </div>
         </div>

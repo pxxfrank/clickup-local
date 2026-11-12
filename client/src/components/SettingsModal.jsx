@@ -285,7 +285,7 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
               <form className="settings-form" onSubmit={saveProfile}>
                 <div className="settings-content-head">
                   <h3>个人资料</h3>
-                  <p>这些信息会显示在任务、评论和成员列表中。</p>
+                  <p>这些信息会显示在任务、进展和成员列表中。</p>
                 </div>
                 <div className="profile-avatar-row">
                   <Avatar user={{ ...user, ...profile }} size={64} />
@@ -402,7 +402,7 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
                       </div>
                     </div>
                     <p>
-                      删除后，所有空间、列表、任务、子任务、评论、文档和附件都会从本机删除。
+                      删除后，所有空间、列表、任务、子任务、进展、文档和附件都会从本机删除。
                       你仍然可以创建一个新的工作空间。
                     </p>
                     <button

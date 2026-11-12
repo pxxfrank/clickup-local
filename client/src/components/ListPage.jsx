@@ -234,6 +234,14 @@ export default function ListPage({ listId, view, onViewChange }) {
     return true;
   }
 
+  const hasActiveFilters =
+    filters.assignee !== 'all' ||
+    filters.priority !== '' ||
+    filters.tagIds.length > 0 ||
+    filters.statusIds.length > 0 ||
+    Boolean(filters.hideDone);
+  const canReorder = group === 'status' && sort === 'manual' && !search.trim() && !hasActiveFilters;
+
   async function handleMoveTask(taskId, statusId, index) {
     try {
       setData((current) => {
@@ -338,7 +346,14 @@ export default function ListPage({ listId, view, onViewChange }) {
       <div className="list-header">
         <div className="list-header-inner">
           <div className="list-title-row">
-            <span className="list-icon-large" style={{ background: `${list.color}1a` }}>
+            <span
+              className="list-icon-large"
+              style={{
+                background: `${list.color}26`,
+                border: `1px solid ${list.color}55`,
+                boxShadow: `inset 0 -3px 0 ${list.color}`,
+              }}
+            >
               {list.icon || '📋'}
             </span>
             <div className="list-title-text">
@@ -490,6 +505,8 @@ export default function ListPage({ listId, view, onViewChange }) {
             onComplete={handleComplete}
             onUpdateTask={handleUpdateTask}
             onAddTask={handleAddTask}
+            onMoveTask={handleMoveTask}
+            canReorder={canReorder}
           />
         )}
         {view === 'board' && (
@@ -597,7 +614,7 @@ export default function ListPage({ listId, view, onViewChange }) {
             <strong>将复制</strong>
             <span>工作流状态、自定义字段、任务与子任务、检查清单、标签、里程碑、项目背景与目的</span>
             <strong>不会复制</strong>
-            <span>评论、附件和成员邀请</span>
+            <span>进展、附件和成员邀请</span>
           </div>
         </form>
       </Modal>
@@ -614,7 +631,7 @@ export default function ListPage({ listId, view, onViewChange }) {
       <ConfirmDialog
         open={deleteOpen}
         title="删除列表"
-        message={`删除「${list.name}」将永久删除列表中的所有任务和评论，此操作无法撤销。`}
+        message={`删除「${list.name}」将永久删除列表中的所有任务和进展，此操作无法撤销。`}
         busy={busy}
         onClose={() => setDeleteOpen(false)}
         onConfirm={deleteList}

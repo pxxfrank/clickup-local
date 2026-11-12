@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
+import { PROJECT_COLORS, colorInfo } from '../lib/colors.js';
 
 import {
   Avatar,
@@ -34,7 +35,6 @@ import {
   Spinner,
 } from './ui.jsx';
 
-const COLORS = ['#7B68EE', '#4A9EFF', '#26C6DA', '#2EA44F', '#F59E0B', '#FF8A65', '#E5484D', '#A25DDC'];
 const ICONS = ['🚀', '📣', '🏡', '💼', '🎯', '🧠', '📦', '🌱', '⚡️', '🛠️'];
 const LIST_ICONS = ['📋', '🏃', '🐞', '📄', '💻', '🎨', '🔬', '✍️', '🎪', '📈', '🤝', '👋', '📌', '🧪'];
 
@@ -369,12 +369,20 @@ export default function Sidebar({ open, onClose }) {
               const collapsed = collapsedSpaces.has(space.id);
               return (
                 <div className="tree-space" key={space.id}>
-                  <div className={`tree-row tree-space-row ${collapsed ? 'is-collapsed' : ''}`}>
+                  <div
+                    className={`tree-row tree-space-row ${collapsed ? 'is-collapsed' : ''}`}
+                    style={{ '--space-color': space.color || '#7B68EE' }}
+                  >
                     <button type="button" className="tree-chevron" onClick={() => toggleSpace(space.id)} aria-label="展开空间">
                       {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                     </button>
                     <button type="button" className="tree-space-main" onClick={() => toggleSpace(space.id)}>
-                      <span className="tree-space-icon">{space.icon || '🚀'}</span>
+                      <span
+                        className="tree-space-icon"
+                        style={{ background: `${space.color || '#7B68EE'}26`, borderColor: `${space.color || '#7B68EE'}55` }}
+                      >
+                        {space.icon || '🚀'}
+                      </span>
                       <span className="tree-label">{space.name}</span>
                     </button>
                     <Popover
@@ -456,13 +464,23 @@ export default function Sidebar({ open, onClose }) {
                                 <div
                                   className={`tree-row tree-list-row ${activeListId === list.id ? 'is-active' : ''}`}
                                   key={list.id}
+                                  style={{
+                                    '--list-color': list.color || '#7B68EE',
+                                    background: activeListId === list.id ? `${list.color || '#7B68EE'}38` : undefined,
+                                    boxShadow: activeListId === list.id ? `inset 2px 0 0 ${list.color || '#7B68EE'}` : undefined,
+                                  }}
                                 >
                                   <button
                                     type="button"
                                     className="tree-list-main"
                                     onClick={() => navigate(`/list/${list.id}`)}
                                   >
-                                    <span className="list-emoji">{list.icon || '📋'}</span>
+                                    <span
+                                      className="list-emoji"
+                                      style={{ background: `${list.color || '#7B68EE'}24`, borderColor: `${list.color || '#7B68EE'}55` }}
+                                    >
+                                      {list.icon || '📋'}
+                                    </span>
                                     <span className="tree-label">{list.name}</span>
                                     {list.task_count > 0 && <span className="tree-count">{list.task_count}</span>}
                                   </button>
@@ -476,9 +494,19 @@ export default function Sidebar({ open, onClose }) {
                         <div
                           className={`tree-row tree-list-row ${activeListId === list.id ? 'is-active' : ''}`}
                           key={list.id}
+                          style={{
+                            '--list-color': list.color || '#7B68EE',
+                            background: activeListId === list.id ? `${list.color || '#7B68EE'}38` : undefined,
+                            boxShadow: activeListId === list.id ? `inset 2px 0 0 ${list.color || '#7B68EE'}` : undefined,
+                          }}
                         >
                           <button type="button" className="tree-list-main" onClick={() => navigate(`/list/${list.id}`)}>
-                            <span className="list-emoji">{list.icon || '📋'}</span>
+                            <span
+                              className="list-emoji"
+                              style={{ background: `${list.color || '#7B68EE'}24`, borderColor: `${list.color || '#7B68EE'}55` }}
+                            >
+                              {list.icon || '📋'}
+                            </span>
                             <span className="tree-label">{list.name}</span>
                             {list.task_count > 0 && <span className="tree-count">{list.task_count}</span>}
                           </button>
@@ -545,7 +573,7 @@ export default function Sidebar({ open, onClose }) {
               <Settings size={16} />
             </IconButton>
           </div>
-          <div className="sidebar-version">ClickUp Local v1.3 · 数据保存在本机</div>
+          <div className="sidebar-version">ClickUp Local v1.4 · 数据保存在本机</div>
         </div>
       </aside>
 
@@ -665,19 +693,28 @@ export default function Sidebar({ open, onClose }) {
                   </div>
                 </div>
                 <div className="field">
-                  <span className="field-label">颜色</span>
+                  <span className="field-label">识别色</span>
                   <div className="color-picker">
-                    {COLORS.map((color) => (
+                    {PROJECT_COLORS.map((color) => (
                       <button
                         type="button"
-                        key={color}
-                        className={`color-option ${itemModal.color === color ? 'is-active' : ''}`}
-                        style={{ background: color }}
-                        onClick={() => setItemModal({ ...itemModal, color })}
-                        aria-label={color}
+                        key={color.value}
+                        className={`color-option ${itemModal.color === color.value ? 'is-active' : ''}`}
+                        style={{ background: color.value }}
+                        onClick={() => setItemModal({ ...itemModal, color: color.value })}
+                        aria-label={`${color.name} · ${color.meaning}`}
+                        title={`${color.name} · ${color.meaning}`}
                       />
                     ))}
                   </div>
+                  <p className="color-meaning">
+                    <span style={{ background: itemModal.color }} />
+                    <strong>{colorInfo(itemModal.color).name}</strong>
+                    <em>· {colorInfo(itemModal.color).meaning} ·</em>
+                    {itemModal.kind === 'space' || itemModal.type === 'space'
+                      ? '会应用到空间图标、左侧标识和侧边栏。'
+                      : '会应用到侧边栏图标、活动标识、列表头部和完成度进度条。'}
+                  </p>
                 </div>
               </>
             )}

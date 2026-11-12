@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowDownUp,
   ArrowLeft,
   CalendarDays,
   Check,
@@ -27,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
-import { formatDate, formatDateSmart, formatBytes, formatTime, parseDateValue, relativeTime } from '../lib/date.js';
+import { formatDate, formatDateSmart, formatBytes, formatDateTime, parseDateValue } from '../lib/date.js';
 import { renderMarkdown } from '../lib/markdown.js';
 import {
   Avatar,
@@ -60,6 +61,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   const [descriptionDraft, setDescriptionDraft] = useState('');
   const [commentDraft, setCommentDraft] = useState('');
   const [sendingComment, setSendingComment] = useState(false);
+  const [progressSort, setProgressSort] = useState('desc');
   const [subtaskDraft, setSubtaskDraft] = useState('');
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [newChecklistOpen, setNewChecklistOpen] = useState(false);
@@ -73,9 +75,19 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   const fileInputRef = useRef(null);
   const titleRef = useRef(null);
   const commentsEndRef = useRef(null);
+  const commentsListRef = useRef(null);
 
   const assignablePeople = bootstrap?.assignees || bootstrap?.members || [];
   const workspaceTags = bootstrap?.tags || [];
+  const progressEntries = useMemo(
+    () =>
+      [...(detail?.comments || [])].sort((a, b) =>
+        progressSort === 'asc'
+          ? String(a.created_at).localeCompare(String(b.created_at))
+          : String(b.created_at).localeCompare(String(a.created_at))
+      ),
+    [detail?.comments, progressSort]
+  );
 
   useEffect(() => {
     if (!taskId) {
@@ -232,7 +244,10 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
       setDetail((current) => ({ ...current, comments: [...(current.comments || []), comment] }));
       setCommentDraft('');
       await refresh();
-      setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 40);
+      setTimeout(() => {
+        if (progressSort === 'desc' && commentsListRef.current) commentsListRef.current.scrollTop = 0;
+        else commentsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 40);
     } catch (requestError) {
       toast(requestError.message, 'error');
     } finally {
@@ -999,19 +1014,30 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                     </section>
 
                     <section className="drawer-section comments-section">
-                      <div className="drawer-section-head">
-                        <h3>评论 <span className="section-count">{detail.comments?.length || 0}</span></h3>
+                      <div className="drawer-section-head progress-section-head">
+                        <h3>进展 <span className="section-count">{detail.comments?.length || 0}</span></h3>
+                        <button
+                          type="button"
+                          className="progress-sort-btn"
+                          onClick={() => setProgressSort((current) => (current === 'desc' ? 'asc' : 'desc'))}
+                          title="切换进展日期排序"
+                        >
+                          <ArrowDownUp size={12} />
+                          {progressSort === 'desc' ? '最新在前' : '最早在前'}
+                        </button>
                       </div>
-                      <div className="comment-list">
-                        {detail.comments?.map((comment) => (
+                      <div className="comment-list" ref={commentsListRef}>
+                        {progressEntries.map((comment) => (
                           <div className="comment-row" key={comment.id}>
                             <Avatar user={{ name: comment.user_name, color: comment.user_color }} size={28} />
                             <div className="comment-main">
                               <div className="comment-head">
                                 <strong>{comment.user_name}</strong>
-                                <span>{relativeTime(comment.created_at)}</span>
+                                <span className="progress-time" title={formatDateTime(comment.created_at, 'yyyy年M月d日 HH:mm')}>
+                                  {formatDateTime(comment.created_at)}
+                                </span>
                                 {(comment.user_id === user?.id || bootstrap?.role === 'owner' || bootstrap?.role === 'admin') && (
-                                  <button type="button" className="comment-delete" onClick={() => removeComment(comment)} title="删除评论">
+                                  <button type="button" className="comment-delete" onClick={() => removeComment(comment)} title="删除进展">
                                     <Trash2 size={12} />
                                   </button>
                                 )}
@@ -1020,7 +1046,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                             </div>
                           </div>
                         ))}
-                        {!detail.comments?.length && <p className="comment-empty">还没有评论，开始讨论吧。</p>}
+                        {!progressEntries.length && <p className="comment-empty">还没有进展记录，写下当前项目进展吧。</p>}
                         <div ref={commentsEndRef} />
                       </div>
                       <form className="comment-composer" onSubmit={addComment}>
@@ -1033,12 +1059,12 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                             onKeyDown={(event) => {
                               if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') addComment(event);
                             }}
-                            placeholder="写下评论…（Ctrl+Enter 发送）"
+                            placeholder="记录当前进展…（Ctrl+Enter 记录）"
                           />
                           <div className="comment-composer-foot">
                             <span>支持 @ 提及团队成员</span>
                             <button type="submit" className="btn btn-primary btn-sm" disabled={!commentDraft.trim() || sendingComment}>
-                              {sendingComment ? <Spinner size={13} /> : <Send size={13} />} 发送
+                              {sendingComment ? <Spinner size={13} /> : <Send size={13} />} 记录进展
                             </button>
                           </div>
                         </div>
@@ -1048,7 +1074,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                     <div className="drawer-footer-meta">
                       <span>创建于 {formatDate(detail.created_at, 'yyyy年M月d日 HH:mm')}</span>
                       <span>·</span>
-                      <span>更新于 {relativeTime(detail.updated_at)}</span>
+                      <span>更新于 {formatDateTime(detail.updated_at)}</span>
                     </div>
                   </div>
                 ) : (
@@ -1059,7 +1085,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                           <Avatar user={{ name: item.user_name, color: item.user_color }} size={26} />
                           <div className="activity-main">
                             <p><strong>{item.user_name}</strong> {item.message}</p>
-                            <span>{relativeTime(item.created_at)} · {formatTime(item.created_at)}</span>
+                            <span>{formatDateTime(item.created_at)}</span>
                           </div>
                         </div>
                       ))}

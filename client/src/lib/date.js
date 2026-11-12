@@ -110,6 +110,13 @@ export function formatTime(value) {
   return format(date, 'HH:mm');
 }
 
+export function formatDateTime(value, pattern = 'yyyy-MM-dd HH:mm') {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return format(date, pattern, { locale: zhCN });
+}
+
 export function formatBytes(bytes) {
   if (!bytes) return '0 B';
   if (bytes < 1024) return `${bytes} B`;

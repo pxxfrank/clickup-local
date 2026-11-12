@@ -600,8 +600,61 @@
   min-height: 43px;
   padding: 3px 10px 3px 7px;
   cursor: pointer;
-  transition: background 0.1s ease;
+  transition: background 0.1s ease, opacity 0.1s ease;
   position: relative;
+}
+
+.task-drag-handle {
+  width: 15px;
+  height: 24px;
+  margin-left: -5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: #b8b7c7;
+  opacity: 0.35;
+  cursor: grab;
+  border-radius: 4px;
+}
+
+.task-row:hover .task-drag-handle {
+  opacity: 1;
+}
+
+.task-drag-handle:active {
+  cursor: grabbing;
+}
+
+.task-row.is-dragging {
+  opacity: 0.42;
+  background: #f5f3ff;
+}
+
+.task-row.is-drop-before::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 9px;
+  right: 9px;
+  height: 2px;
+  border-radius: 99px;
+  background: var(--brand);
+  z-index: 4;
+  box-shadow: 0 0 0 1px rgba(123, 104, 238, 0.12);
+}
+
+.task-group.is-drag-target .task-group-body {
+  border-color: var(--brand-line);
+  box-shadow: 0 0 0 2px rgba(123, 104, 238, 0.06);
+}
+
+.task-drop-line {
+  height: 2px;
+  margin: 4px 10px;
+  border-radius: 99px;
+  background: var(--brand);
+  box-shadow: 0 0 0 1px rgba(123, 104, 238, 0.12);
 }
 
 .task-row + .task-row {
