@@ -43,9 +43,9 @@
 
 不想处理 Node.js、命令行或端口环境时，可以直接使用 Windows 安装包：
 
-**直接下载：** [ClickUp-Local-Setup-1.4.0.exe](https://github.com/pxxfrank/clickup-local/releases/download/v1.4.0/ClickUp-Local-Setup-1.4.0.exe)  
+**直接下载：** [ClickUp-Local-Setup-1.4.1.exe](https://github.com/pxxfrank/clickup-local/releases/download/v1.4.1/ClickUp-Local-Setup-1.4.1.exe)  
 **发布页：** [GitHub Releases](https://github.com/pxxfrank/clickup-local/releases/latest)  
-**文件名：** `ClickUp-Local-Setup-1.4.0.exe`（约 24 MB，已内置 Node.js 运行时）
+**文件名：** `ClickUp-Local-Setup-1.4.1.exe`（约 24 MB，已内置 Node.js 运行时）
 
 安装包支持 Windows 10 / 11 x64，安装到当前用户目录，**不需要管理员权限**，也不需要预装 Node.js。
 
@@ -129,7 +129,7 @@ npm run dev
 - 打开项目默认进入「概览」，视图顺序为：**概览、头脑风暴、列表、看板、日历、甘特、复盘**。
 - **头脑风暴**：连续记录零散想法，最后统一送入「待处理」。
 - **概览**：填写项目背景与目的、设置里程碑，并通过横向时间轴查看关键节点。
-- **项目全景**：在项目背景与目的下方定义阶段（名称、起止日期、颜色）。里程碑会按日期自动归入阶段并显示对应颜色，时间轴顶部用色块呈现完整阶段。
+- **项目全景**：在项目背景与目的下方定义阶段（名称、起止日期、颜色）。阶段色块与里程碑共用同一条日期刻度，色块起止、里程碑节点和日期严格对齐；里程碑会按日期自动归入阶段并显示对应颜色。
 - **复盘**：每次复盘会快照当前逾期和已完成任务，形成独立时间轴；支持多次复盘、填写和修改复盘内容，历史会话互不影响。
 - 任务支持 **一位负责人 + 多位参与人**；参与人可以多选，并会显示在列表和看板的任务卡片上。
 - **列表拖拽**：在「按状态分组 + 手动排序」且没有筛选条件时，拖动任务行首的手柄可以调整状态和组内顺序。

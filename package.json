@@ -1,6 +1,6 @@
 {
   "name": "clickup-local",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "type": "module",
   "description": "ClickUp 风格的单机项目管理应用",

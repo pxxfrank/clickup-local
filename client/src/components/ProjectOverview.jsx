@@ -15,10 +15,15 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
-import { addDays, dueTone, format, formatDateSmart, parseDateValue, todayKey, zhCN } from '../lib/date.js';
+import { addDays, addMonths, dueTone, format, formatDateSmart, parseDateValue, startOfMonth, todayKey, zhCN } from '../lib/date.js';
 import { ConfirmDialog, Modal, ProgressBar, Spinner } from './ui.jsx';
 
 const PHASE_COLORS = ['#7B68EE', '#4A9EFF', '#2EA44F', '#F59E0B', '#F06A6A', '#EC4899'];
+const TIMELINE_CARD_WIDTH = 196;
+const TIMELINE_CARD_HEIGHT = 116;
+const TIMELINE_GUTTER = 112;
+const TIMELINE_PHASE_LANE = 54;
+const TIMELINE_MS_GAP = 14;
 
 function emptyMilestoneForm(listColor) {
   return {
@@ -45,6 +50,13 @@ function daysInclusive(start, end) {
   const endDate = parseDateValue(end);
   if (!startDate || !endDate) return 1;
   return Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+}
+
+function dayDistance(start, end) {
+  const startDate = parseDateValue(start);
+  const endDate = parseDateValue(end);
+  if (!startDate || !endDate) return 0;
+  return Math.round((endDate.getTime() - startDate.getTime()) / 86400000);
 }
 
 export default function ProjectOverview({
@@ -129,6 +141,108 @@ export default function ProjectOverview({
       (phase) => phase.start_date <= milestone.due_date && phase.end_date >= milestone.due_date
     );
   }
+
+  const timeline = useMemo(() => {
+    if (!sortedMilestones.length) return null;
+    const today = todayKey();
+    const dateKeys = [
+      today,
+      ...sortedPhases.flatMap((phase) => [phase.start_date, phase.end_date]),
+      ...sortedMilestones.map((milestone) => milestone.due_date),
+    ].filter(Boolean);
+    const times = dateKeys.map((value) => parseDateValue(value)?.getTime()).filter((value) => value !== undefined);
+    if (!times.length) return null;
+    let start = addDays(new Date(Math.min(...times)), -5);
+    let end = addDays(new Date(Math.max(...times)), 5);
+    if (dayDistance(start, end) < 21) end = addDays(start, 21);
+    const totalDays = dayDistance(start, end) + 1;
+
+    const milestoneTimes = sortedMilestones
+      .map((milestone) => parseDateValue(milestone.due_date)?.getTime())
+      .filter((value) => value !== undefined)
+      .sort((a, b) => a - b);
+    let minGap = 14;
+    for (let index = 1; index < milestoneTimes.length; index += 1) {
+      const gap = Math.round((milestoneTimes[index] - milestoneTimes[index - 1]) / 86400000);
+      if (gap > 0) minGap = Math.min(minGap, gap);
+    }
+    const pxPerDay = Math.max(16, Math.min(64, Math.ceil(200 / Math.max(1, minGap))));
+    const xForDate = (value) => TIMELINE_GUTTER + dayDistance(start, value) * pxPerDay;
+    const width = Math.max(820, totalDays * pxPerDay + TIMELINE_GUTTER * 2);
+
+    const phaseLanes = [];
+    const phaseBlocks = sortedPhases
+      .map((phase) => {
+        const left = xForDate(phase.start_date);
+        const phaseWidth = Math.max(44, xForDate(phase.end_date) - left + pxPerDay);
+        const right = left + phaseWidth;
+        let lane = 0;
+        while (
+          phaseLanes[lane]?.some(
+            (interval) => left < interval.right + 8 && right > interval.left - 8
+          )
+        ) {
+          lane += 1;
+        }
+        if (!phaseLanes[lane]) phaseLanes[lane] = [];
+        phaseLanes[lane].push({ left, right });
+        return { ...phase, left, width: phaseWidth, lane, top: 6 + lane * TIMELINE_PHASE_LANE };
+      })
+      .filter((phase) => Number.isFinite(phase.left));
+
+    const phaseHeight = phaseLanes.length ? phaseLanes.length * TIMELINE_PHASE_LANE + 6 : 0;
+    const cardsTop = phaseHeight + 18;
+    const milestoneLanes = [];
+    const milestoneBlocks = sortedMilestones
+      .map((milestone) => {
+        const x = xForDate(milestone.due_date);
+        const left = x - TIMELINE_CARD_WIDTH / 2;
+        const right = x + TIMELINE_CARD_WIDTH / 2;
+        let lane = 0;
+        while (
+          milestoneLanes[lane]?.some(
+            (interval) => left < interval.right + 12 && right > interval.left - 12
+          )
+        ) {
+          lane += 1;
+        }
+        if (!milestoneLanes[lane]) milestoneLanes[lane] = [];
+        milestoneLanes[lane].push({ left, right });
+        return {
+          milestone,
+          x,
+          left,
+          lane,
+          top: cardsTop + lane * (TIMELINE_CARD_HEIGHT + TIMELINE_MS_GAP),
+          phase: phaseForMilestone(milestone),
+        };
+      })
+      .filter((block) => Number.isFinite(block.x));
+
+    if (!milestoneBlocks.length) return null;
+    const axisY = cardsTop + milestoneLanes.length * (TIMELINE_CARD_HEIGHT + TIMELINE_MS_GAP) + 4;
+    const monthTicks = [];
+    let cursor = startOfMonth(start);
+    while (cursor <= end) {
+      if (cursor >= start) {
+        monthTicks.push({ x: xForDate(cursor), label: format(cursor, 'M月') });
+      }
+      cursor = addMonths(cursor, 1);
+    }
+    const todayDate = parseDateValue(today);
+    const todayInRange = todayDate >= start && todayDate <= end;
+    return {
+      width,
+      height: axisY + 62,
+      axisY,
+      cardsTop,
+      phaseHeight,
+      phaseBlocks,
+      milestoneBlocks,
+      monthTicks,
+      todayX: todayInRange ? xForDate(today) : null,
+    };
+  }, [sortedMilestones, sortedPhases]);
 
   async function savePurpose() {
     setSavingPurpose(true);
@@ -327,43 +441,70 @@ export default function ProjectOverview({
           </button>
         </div>
 
-        {sortedPhases.length > 0 && (
-          <div className="phase-band-scroll">
-            <div className="phase-band">
-              {sortedPhases.map((phase) => (
+        {timeline ? (
+          <div className="project-timeline-scroll">
+            <div className="project-timeline-canvas" style={{ width: timeline.width, height: timeline.height }}>
+              {timeline.monthTicks.map((tick) => (
+                <div className="timeline-month" key={`${tick.x}-${tick.label}`}>
+                  <span className="timeline-month-line" style={{ left: tick.x, height: timeline.axisY }} />
+                  <span className="timeline-month-label" style={{ left: tick.x, top: timeline.axisY + 35 }}>
+                    {tick.label}
+                  </span>
+                </div>
+              ))}
+              {timeline.todayX !== null && (
+                <div className="timeline-today" style={{ left: timeline.todayX, height: timeline.axisY }}>
+                  <span>今天</span>
+                </div>
+              )}
+
+              {timeline.phaseBlocks.map((phase) => (
                 <div
-                  className="phase-block"
+                  className="timeline-phase-zone"
+                  key={`zone-${phase.id}`}
+                  style={{
+                    left: phase.left,
+                    top: phase.top + 44,
+                    width: phase.width,
+                    height: Math.max(0, timeline.axisY - phase.top - 44),
+                    background: `${phase.color}0d`,
+                    borderColor: `${phase.color}33`,
+                  }}
+                />
+              ))}
+              {timeline.phaseBlocks.map((phase) => (
+                <div
+                  className="timeline-phase-block"
                   key={phase.id}
                   style={{
-                    flexGrow: daysInclusive(phase.start_date, phase.end_date),
-                    background: `${phase.color}14`,
-                    borderColor: `${phase.color}4d`,
+                    left: phase.left,
+                    top: phase.top,
+                    width: phase.width,
+                    background: `${phase.color}19`,
+                    borderColor: `${phase.color}59`,
                   }}
+                  title={`${phase.name}：${phase.start_date} — ${phase.end_date}`}
                 >
-                  <span className="phase-block-dot" style={{ background: phase.color }} />
+                  <span className="timeline-phase-dot" style={{ background: phase.color }} />
                   <strong>{phase.name}</strong>
                   <em>{formatDateSmart(phase.start_date)} — {formatDateSmart(phase.end_date)}</em>
                 </div>
               ))}
-            </div>
-          </div>
-        )}
 
-        {sortedMilestones.length ? (
-          <div className="milestone-hscroll">
-            <div className="milestone-hrow">
-              {sortedMilestones.map((milestone) => {
+              <div className="timeline-axis" style={{ top: timeline.axisY }} />
+
+              {timeline.milestoneBlocks.map(({ milestone, left, top, phase }) => {
                 const days = differenceInDays(milestone.due_date);
                 const overdue = !milestone.completed && days < 0;
                 const soon = !milestone.completed && days >= 0 && days <= 7;
-                const phase = phaseForMilestone(milestone);
                 return (
                   <div
-                    className={`milestone-hitem ${milestone.completed ? 'is-completed' : ''} ${overdue ? 'is-overdue' : ''}`}
+                    className={`timeline-ms ${milestone.completed ? 'is-completed' : ''} ${overdue ? 'is-overdue' : ''}`}
                     key={milestone.id}
+                    style={{ left, top, width: TIMELINE_CARD_WIDTH }}
                   >
                     <div
-                      className="milestone-hcard"
+                      className="timeline-ms-card"
                       style={phase ? { borderTop: `3px solid ${phase.color}` } : undefined}
                     >
                       <div className="milestone-hcard-top">
@@ -384,20 +525,26 @@ export default function ProjectOverview({
                       <h4>{milestone.name}</h4>
                       {milestone.description && <p className="milestone-desc">{milestone.description}</p>}
                     </div>
-                    <span className="milestone-hstem" />
+                    <span
+                      className="timeline-ms-connector"
+                      style={{ height: Math.max(8, timeline.axisY - top - TIMELINE_CARD_HEIGHT) }}
+                    />
                     <button
                       type="button"
-                      className={`milestone-check ${milestone.completed ? 'is-checked' : ''}`}
-                      style={phase && !milestone.completed ? { borderColor: phase.color } : undefined}
+                      className={`milestone-check timeline-ms-node ${milestone.completed ? 'is-checked' : ''}`}
+                      style={{
+                        top: timeline.axisY - top - 9,
+                        borderColor: phase && !milestone.completed ? phase.color : undefined,
+                      }}
                       onClick={() => toggleMilestone(milestone)}
                       title={milestone.completed ? '标记为未完成' : '标记为完成'}
                     >
                       {milestone.completed ? <Check size={11} /> : null}
                     </button>
-                    <div className="milestone-hlabel">
+                    <div className="timeline-ms-date" style={{ top: timeline.axisY - top + 13 }}>
                       <strong>{formatDateSmart(milestone.due_date)}</strong>
                       <span>{format(parseDateValue(milestone.due_date), 'EEEEEE', { locale: zhCN })}</span>
-                      {phase && <em className="milestone-hphase" style={{ color: phase.color }}>{phase.name}</em>}
+                      {phase && <em style={{ color: phase.color }}>{phase.name}</em>}
                     </div>
                   </div>
                 );
