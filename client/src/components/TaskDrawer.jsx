@@ -67,6 +67,10 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   const [newChecklistOpen, setNewChecklistOpen] = useState(false);
   const [newChecklistName, setNewChecklistName] = useState('');
   const [itemDrafts, setItemDrafts] = useState({});
+  const [editingChecklistId, setEditingChecklistId] = useState(null);
+  const [checklistTitleDraft, setChecklistTitleDraft] = useState('');
+  const [editingItemId, setEditingItemId] = useState(null);
+  const [checklistItemDraft, setChecklistItemDraft] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -275,6 +279,42 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
       setNewChecklistOpen(false);
       await reload();
       await refresh();
+    } catch (requestError) {
+      toast(requestError.message, 'error');
+    }
+  }
+
+  function beginChecklistRename(checklist) {
+    setEditingChecklistId(checklist.id);
+    setChecklistTitleDraft(checklist.name);
+  }
+
+  async function saveChecklistRename(checklist) {
+    const name = checklistTitleDraft.trim();
+    setEditingChecklistId(null);
+    if (!name || name === checklist.name) return;
+    try {
+      await api.patch(`/checklists/${checklist.id}`, { name });
+      await reload();
+      toast('清单名称已更新');
+    } catch (requestError) {
+      toast(requestError.message, 'error');
+    }
+  }
+
+  function beginChecklistItemEdit(item) {
+    setEditingItemId(item.id);
+    setChecklistItemDraft(item.name);
+  }
+
+  async function saveChecklistItemName(item) {
+    const name = checklistItemDraft.trim();
+    setEditingItemId(null);
+    if (!name || name === item.name) return;
+    try {
+      await api.patch(`/checklist-items/${item.id}`, { name });
+      await reload();
+      toast('检查项已更新');
     } catch (requestError) {
       toast(requestError.message, 'error');
     }
@@ -928,8 +968,39 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                         return (
                           <div className="checklist-block" key={checklist.id}>
                             <div className="checklist-head">
-                              <span className="checklist-title">{checklist.name}</span>
+                              {editingChecklistId === checklist.id ? (
+                                <input
+                                  className="checklist-title-input"
+                                  autoFocus
+                                  value={checklistTitleDraft}
+                                  onChange={(event) => setChecklistTitleDraft(event.target.value)}
+                                  onBlur={() => saveChecklistRename(checklist)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                      event.preventDefault();
+                                      saveChecklistRename(checklist);
+                                    }
+                                    if (event.key === 'Escape') {
+                                      event.preventDefault();
+                                      setChecklistTitleDraft(checklist.name);
+                                      setEditingChecklistId(null);
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="checklist-title checklist-title-button"
+                                  onClick={() => beginChecklistRename(checklist)}
+                                  title="点击编辑清单名称"
+                                >
+                                  {checklist.name}
+                                </button>
+                              )}
                               <span className="checklist-progress-text">{done}/{checklist.items.length}</span>
+                              <button type="button" className="icon-btn checklist-edit" onClick={() => beginChecklistRename(checklist)} title="编辑清单名称">
+                                <Pencil size={12} />
+                              </button>
                               <button type="button" className="icon-btn icon-btn-danger checklist-delete" onClick={() => removeChecklist(checklist)} title="删除清单">
                                 <Trash2 size={13} />
                               </button>
@@ -941,7 +1012,38 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                                   <button type="button" className={`task-check ${item.done ? 'is-checked' : ''}`} onClick={() => toggleChecklistItem(checklist.id, item)}>
                                     {item.done ? <Check size={10} /> : null}
                                   </button>
-                                  <span>{item.name}</span>
+                                  {editingItemId === item.id ? (
+                                    <input
+                                      className="checklist-item-input"
+                                      autoFocus
+                                      value={checklistItemDraft}
+                                      onChange={(event) => setChecklistItemDraft(event.target.value)}
+                                      onBlur={() => saveChecklistItemName(item)}
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                          event.preventDefault();
+                                          saveChecklistItemName(item);
+                                        }
+                                        if (event.key === 'Escape') {
+                                          event.preventDefault();
+                                          setChecklistItemDraft(item.name);
+                                          setEditingItemId(null);
+                                        }
+                                      }}
+                                    />
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="checklist-item-name"
+                                      onClick={() => beginChecklistItemEdit(item)}
+                                      title="点击编辑检查项"
+                                    >
+                                      {item.name}
+                                    </button>
+                                  )}
+                                  <button type="button" className="checklist-edit" onClick={() => beginChecklistItemEdit(item)} title="编辑检查项">
+                                    <Pencil size={11} />
+                                  </button>
                                   <button type="button" className="checklist-remove" onClick={() => removeChecklistItem(checklist.id, item)}>
                                     <X size={12} />
                                   </button>

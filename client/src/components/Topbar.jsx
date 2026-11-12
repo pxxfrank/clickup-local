@@ -58,6 +58,11 @@ export default function Topbar({ onOpenSidebar }) {
               <ChevronRight size={13} className="crumb-sep" />
               <span className="crumb-current">收件箱</span>
             </>
+          ) : route.type === 'portfolio' ? (
+            <>
+              <ChevronRight size={13} className="crumb-sep" />
+              <span className="crumb-current">项目组合</span>
+            </>
           ) : route.type === 'doc' ? (
             <>
               <ChevronRight size={13} className="crumb-sep" />

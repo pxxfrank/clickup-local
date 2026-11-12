@@ -18,6 +18,8 @@ export function readRoute() {
       return { type: 'doc', id: segments[1] };
     case 'inbox':
       return { type: 'inbox' };
+    case 'portfolio':
+      return { type: 'portfolio' };
     case 'home':
       return { type: 'home' };
     default:

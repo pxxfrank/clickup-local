@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar.jsx';
 import Topbar from './components/Topbar.jsx';
 import HomePage from './components/HomePage.jsx';
 import InboxPage from './components/InboxPage.jsx';
+import PortfolioPage from './components/PortfolioPage.jsx';
 import ListPage from './components/ListPage.jsx';
 import DocPage from './components/DocPage.jsx';
 import TaskDrawer from './components/TaskDrawer.jsx';
@@ -262,6 +263,7 @@ export default function App() {
           <main className="page-scroll">
             {route.type === 'home' && <HomePage />}
             {route.type === 'inbox' && <InboxPage />}
+            {route.type === 'portfolio' && <PortfolioPage />}
             {route.type === 'list' && (
               <ListPage
                 key={route.id}
@@ -271,7 +273,7 @@ export default function App() {
               />
             )}
             {route.type === 'doc' && <DocPage docId={route.id} key={route.id} />}
-            {!['home', 'inbox', 'list', 'doc'].includes(route.type) && (
+            {!['home', 'inbox', 'portfolio', 'list', 'doc'].includes(route.type) && (
               <div className="page-not-found">
                 <h2>页面不存在</h2>
                 <button type="button" className="btn btn-primary" onClick={() => navigate('/home')}>

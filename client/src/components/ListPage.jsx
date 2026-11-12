@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
   ClipboardCheck,
+  FileText,
   GanttChartSquare,
   KanbanSquare,
   LayoutDashboard,
@@ -39,6 +40,7 @@ import GanttView from './GanttView.jsx';
 import BrainstormView from './BrainstormView.jsx';
 import ProjectOverview from './ProjectOverview.jsx';
 import RetrospectiveView from './RetrospectiveView.jsx';
+import WeeklyReportModal from './WeeklyReportModal.jsx';
 import ListSettingsModal from './ListSettingsModal.jsx';
 
 const VIEWS = [
@@ -67,6 +69,7 @@ export default function ListPage({ listId, view, onViewChange }) {
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateBusy, setTemplateBusy] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [prefs, setPrefs] = useLocalStorage(`clickup:view-prefs:${listId}`, {
     sort: 'manual',
     group: 'status',
@@ -487,6 +490,10 @@ export default function ListPage({ listId, view, onViewChange }) {
               search={search}
               setSearch={setSearch}
             />
+            <button type="button" className="btn btn-ghost btn-sm report-btn" onClick={() => setReportOpen(true)}>
+              <FileText size={15} />
+              周报
+            </button>
             <button type="button" className="btn btn-primary btn-sm new-task-btn" onClick={() => openCreateTask({ list_id: list.id })}>
               <Plus size={15} />
               新建任务
@@ -626,6 +633,12 @@ export default function ListPage({ listId, view, onViewChange }) {
         fields={data.fields}
         onClose={() => setSettingsOpen(false)}
         onChanged={refresh}
+      />
+
+      <WeeklyReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        list={list}
       />
 
       <ConfirmDialog

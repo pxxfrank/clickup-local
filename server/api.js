@@ -69,6 +69,72 @@ function localDateKey(value) {
   return `${year}-${month}-${day}`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function dateFromKey(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function addDaysKey(value, days) {
+  const date = dateFromKey(value);
+  if (!date) return null;
+  date.setDate(date.getDate() + days);
+  return localDateKey(date);
+}
+
+function dayDiff(from, to) {
+  const start = dateFromKey(from);
+  const end = dateFromKey(to);
+  if (!start || !end) return null;
+  return Math.round((end.getTime() - start.getTime()) / 86400000);
+}
+
+function weekStartKey() {
+  const today = dateFromKey(todayStr());
+  const offset = (today.getDay() + 6) % 7;
+  return addDaysKey(todayStr(), -offset);
+}
+
+function shortDateCN(value) {
+  const date = dateFromKey(value);
+  if (!date) return '';
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function rangeLabelCN(start, end) {
+  const startDate = dateFromKey(start);
+  const endDate = dateFromKey(end);
+  if (!startDate || !endDate) return '';
+  if (startDate.getFullYear() === endDate.getFullYear()) {
+    return `${startDate.getFullYear()}年${startDate.getMonth() + 1}月${startDate.getDate()}日 — ${endDate.getMonth() + 1}月${endDate.getDate()}日`;
+  }
+  return `${startDate.getFullYear()}年${startDate.getMonth() + 1}月${startDate.getDate()}日 — ${endDate.getFullYear()}年${endDate.getMonth() + 1}月${endDate.getDate()}日`;
+}
+
+function safeColor(value, fallback = '#7B68EE') {
+  return /^#[0-9a-fA-F]{6}$/.test(String(value || '')) ? value : fallback;
+}
+
+function formatReportTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${d} ${hh}:${mm}`;
+}
+
 function buildTemplateSnapshot(listId) {
   const db = getDb();
   const list = db
@@ -566,6 +632,404 @@ export function createApiRouter() {
     });
   });
 
+  router.get('/lists/:id/weekly-report', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).type('html').send('<h1>项目不存在</h1>');
+    const defaultStart = weekStartKey();
+    const defaultEnd = addDaysKey(defaultStart, 6);
+    const requestedStart = String(req.query.start || '');
+    const requestedEnd = String(req.query.end || '');
+    const start =
+      /^\d{4}-\d{2}-\d{2}$/.test(requestedStart) && /^\d{4}-\d{2}-\d{2}$/.test(requestedEnd) && requestedEnd >= requestedStart
+        ? requestedStart
+        : defaultStart;
+    const end = start === requestedStart ? requestedEnd : defaultEnd;
+    const nextStart = addDaysKey(end, 1);
+    const nextEnd = addDaysKey(end, 7);
+    const today = todayStr();
+    const reportColor = safeColor(list.color);
+
+    const tasks = db
+      .prepare(
+        `SELECT t.*, st.name AS status_name, st.color AS status_color, st.type AS status_type,
+                u.name AS assignee_name
+         FROM tasks t
+         LEFT JOIN statuses st ON st.id = t.status_id
+         LEFT JOIN users u ON u.id = t.assignee_id
+         WHERE t.list_id = ? AND t.archived = 0 AND t.parent_id IS NULL
+         ORDER BY t.order_index, t.created_at`
+      )
+      .all(list.id);
+    const milestones = db
+      .prepare('SELECT * FROM milestones WHERE list_id = ? ORDER BY due_date, order_index')
+      .all(list.id);
+    const phases = db
+      .prepare('SELECT * FROM project_phases WHERE list_id = ? ORDER BY start_date, order_index')
+      .all(list.id);
+    const progressRows = db
+      .prepare(
+        `SELECT c.id, c.body, c.created_at, u.name AS user_name, t.name AS task_name
+         FROM comments c JOIN tasks t ON t.id = c.task_id
+         LEFT JOIN users u ON u.id = c.user_id
+         WHERE t.list_id = ? ORDER BY c.created_at ASC`
+      )
+      .all(list.id);
+
+    const isDone = (task) => ['done', 'closed'].includes(task.status_type);
+    const completed = tasks.filter((task) => {
+      if (!isDone(task)) return false;
+      const completedDate = localDateKey(task.completed_at) || localDateKey(task.updated_at);
+      return completedDate >= start && completedDate <= end;
+    });
+    const active = tasks.filter((task) => !isDone(task));
+    const overdue = active.filter((task) => task.due_date && task.due_date < today);
+    const highRisk = active.filter(
+      (task) => task.priority === 1 && task.due_date && task.due_date >= today && task.due_date <= addDaysKey(today, 7)
+    );
+    const risks = [...overdue, ...highRisk.filter((task) => !overdue.some((item) => item.id === task.id))];
+    const nextWeekTasks = active.filter(
+      (task) => task.due_date && task.due_date >= nextStart && task.due_date <= nextEnd
+    );
+    const progress = progressRows.filter((entry) => {
+      const entryDate = localDateKey(entry.created_at);
+      return entryDate >= start && entryDate <= end;
+    });
+    const achievedMilestones = milestones.filter((milestone) => {
+      if (!milestone.completed) return false;
+      const date = localDateKey(milestone.updated_at);
+      return date >= start && date <= end;
+    });
+    const nextMilestones = milestones.filter(
+      (milestone) => !milestone.completed && milestone.due_date >= nextStart && milestone.due_date <= nextEnd
+    );
+    const doneCount = tasks.filter(isDone).length;
+    const completion = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
+    const currentPhase = phases.find((phase) => phase.start_date <= today && phase.end_date >= today) || null;
+    const phaseFor = (date) => phases.find((phase) => phase.start_date <= date && phase.end_date >= date);
+    const priorityLabel = { 1: '紧急', 2: '高', 3: '普通', 4: '低' };
+
+    const statusBadge = (task) =>
+      `<span class="status" style="--status-color:${safeColor(task.status_color, '#87909e')}"><i></i>${escapeHtml(task.status_name || '未设置')}</span>`;
+    const emptyRow = (columns, text = '暂无记录') =>
+      `<tr><td colspan="${columns}" class="empty">${escapeHtml(text)}</td></tr>`;
+    const taskTable = (rows, mode) => {
+      if (!rows.length) return `<p class="empty-block">${mode === 'completed' ? '本周还没有已完成任务。' : '当前没有符合条件的任务。'}</p>`;
+      return `<table><thead><tr><th>任务</th><th>状态</th><th>负责人</th><th>${mode === 'completed' ? '完成日期' : '截止日期'}</th><th>优先级</th></tr></thead><tbody>${rows
+        .map(
+          (task) => `<tr>
+            <td class="task-name">${escapeHtml(task.name)}</td>
+            <td>${statusBadge(task)}</td>
+            <td>${escapeHtml(task.assignee_name || '未指派')}</td>
+            <td>${escapeHtml(
+              mode === 'completed'
+                ? shortDateCN(localDateKey(task.completed_at) || localDateKey(task.updated_at))
+                : task.due_date
+                  ? shortDateCN(task.due_date)
+                  : '未设置'
+            )}</td>
+            <td>${escapeHtml(priorityLabel[task.priority] || '无')}</td>
+          </tr>`
+        )
+        .join('')}</tbody></table>`;
+    };
+    const nextWeekRows = [
+      ...nextWeekTasks.map((task) => ({
+        date: task.due_date,
+        title: task.name,
+        meta: `${task.status_name || '待处理'} · ${task.assignee_name || '未指派'}`,
+        type: '任务',
+      })),
+      ...nextMilestones.map((milestone) => ({
+        date: milestone.due_date,
+        title: milestone.name,
+        meta: '里程碑',
+        type: '里程碑',
+      })),
+    ].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const phaseRows = phases.length
+      ? `<table><thead><tr><th>阶段</th><th>开始日期</th><th>结束日期</th><th>状态</th></tr></thead><tbody>${phases
+          .map(
+            (phase) => `<tr>
+              <td><span class="phase-dot" style="background:${safeColor(phase.color)}"></span>${escapeHtml(phase.name)}</td>
+              <td>${escapeHtml(shortDateCN(phase.start_date))}</td>
+              <td>${escapeHtml(shortDateCN(phase.end_date))}</td>
+              <td>${phase.start_date <= today && phase.end_date >= today ? '当前阶段' : phase.end_date < today ? '已结束' : '未开始'}</td>
+            </tr>`
+          )
+          .join('')}</tbody></table>`
+      : '<p class="empty-block">还没有设置项目阶段。</p>';
+    const milestoneRows = milestones.length
+      ? `<table><thead><tr><th>里程碑</th><th>所属阶段</th><th>日期</th><th>状态</th></tr></thead><tbody>${milestones
+          .map((milestone) => {
+            const phase = phaseFor(milestone.due_date);
+            return `<tr>
+              <td class="task-name">${escapeHtml(milestone.name)}</td>
+              <td>${phase ? `<span class="phase-dot" style="background:${safeColor(phase.color)}"></span>${escapeHtml(phase.name)}` : '未分阶段'}</td>
+              <td>${escapeHtml(shortDateCN(milestone.due_date))}</td>
+              <td>${milestone.completed ? '已完成' : milestone.due_date < today ? '已逾期' : '待完成'}</td>
+            </tr>`;
+          })
+          .join('')}</tbody></table>`
+      : '<p class="empty-block">还没有设置里程碑。</p>';
+    const progressHtml = progress.length
+      ? progress
+          .map(
+            (entry) => `<article class="progress-entry">
+              <div class="progress-entry-head"><strong>${escapeHtml(entry.user_name || '成员')}</strong><span>${escapeHtml(formatReportTime(entry.created_at))}</span></div>
+              <div class="progress-task">${escapeHtml(entry.task_name)}</div>
+              <p>${escapeHtml(entry.body).replace(/\n/g, '<br/>')}</p>
+            </article>`
+          )
+          .join('')
+      : '<p class="empty-block">本周还没有进展记录。</p>';
+
+    const summaryLine = `本周完成 ${completed.length} 个任务，当前 ${active.length} 个任务进行中，${overdue.length} 个任务逾期。项目整体完成度为 ${completion}%。`;
+    const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtml(list.name)} · 周报 · ${escapeHtml(start)} 至 ${escapeHtml(end)}</title>
+<style>
+  @page { size: A4; margin: 14mm 13mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #eef1f6; color: #252432; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; font-size: 10pt; line-height: 1.55; }
+  .print-bar { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 24px; background: #24212f; color: #fff; font-size: 12px; }
+  .print-bar button { border: 0; border-radius: 6px; padding: 8px 14px; background: ${reportColor}; color: #fff; font-weight: 650; cursor: pointer; }
+  .print-bar span { color: rgba(255,255,255,.66); }
+  .report-shell { padding: 24px 12px 42px; }
+  .report { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 15mm 14mm; background: #fff; box-shadow: 0 10px 34px rgba(24,20,45,.12); }
+  .report-header { border-top: 5px solid ${reportColor}; padding-top: 15px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+  .kicker { color: ${reportColor}; font-size: 9pt; font-weight: 750; letter-spacing: 1.5px; text-transform: uppercase; }
+  h1 { margin: 5px 0 4px; font-size: 25pt; line-height: 1.12; letter-spacing: -.7px; }
+  .report-meta { color: #777386; font-size: 9pt; }
+  .report-period { flex: none; text-align: right; padding: 9px 11px; border: 1px solid #e6e3ef; border-radius: 8px; background: #faf9ff; }
+  .report-period strong { display: block; font-size: 10pt; }
+  .report-period span { display: block; margin-top: 3px; color: #8a8698; font-size: 8pt; }
+  .print-btn { display: none; }
+  .section { margin-top: 21px; break-inside: avoid; }
+  .section h2 { margin: 0 0 9px; padding-bottom: 5px; border-bottom: 1px solid #e9e6f0; font-size: 12pt; }
+  .section h2 span { color: #9c98a8; font-size: 8pt; font-weight: 500; margin-left: 6px; }
+  .section p { margin: 5px 0; }
+  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 9px; }
+  .summary-card { padding: 10px; border: 1px solid #e9e6f0; border-radius: 8px; background: #fbfaff; }
+  .summary-card span { display: block; color: #8b8798; font-size: 8pt; }
+  .summary-card strong { display: block; margin-top: 3px; font-size: 19pt; line-height: 1.1; }
+  .summary-card em { color: #7d798a; font-size: 8pt; font-style: normal; }
+  .summary-link { margin-top: 8px; color: #6a6678; font-size: 9pt; }
+  .progress-track { height: 7px; margin-top: 8px; border-radius: 99px; background: #eeeaf6; overflow: hidden; }
+  .progress-track i { display: block; height: 100%; background: ${reportColor}; border-radius: inherit; }
+  .overview-box { padding: 11px 12px; border-left: 3px solid ${reportColor}; background: #faf9ff; border-radius: 0 7px 7px 0; white-space: pre-wrap; }
+  .empty-block { padding: 9px 0; color: #8b8798; font-size: 9pt; }
+  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  th { padding: 6px 7px; text-align: left; color: #858193; font-weight: 600; background: #f7f6fb; border-bottom: 1px solid #e8e5ef; }
+  td { padding: 6px 7px; border-bottom: 1px solid #f0edf5; vertical-align: top; }
+  td.empty { color: #9894a3; }
+  .task-name { font-weight: 650; color: #302d3d; }
+  .status { display: inline-flex; align-items: center; gap: 4px; padding: 2px 5px; border-radius: 4px; background: color-mix(in srgb, var(--status-color) 14%, white); color: var(--status-color); font-size: 8pt; white-space: nowrap; }
+  .status i { width: 5px; height: 5px; border-radius: 50%; background: var(--status-color); }
+  .phase-dot { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; vertical-align: 1px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .progress-entry { padding: 8px 0; border-bottom: 1px solid #f0edf5; break-inside: avoid; }
+  .progress-entry:last-child { border-bottom: 0; }
+  .progress-entry-head { display: flex; align-items: center; gap: 8px; }
+  .progress-entry-head strong { font-size: 9pt; }
+  .progress-entry-head span { color: #8f8b9c; font-family: ui-monospace, Consolas, monospace; font-size: 8pt; }
+  .progress-task { color: ${reportColor}; font-size: 8pt; }
+  .progress-entry p { margin: 3px 0 0; white-space: normal; }
+  .report-subhead { margin: 8px 0 5px; color: #777386; font-size: 8.5pt; font-weight: 650; }
+  .report-footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid #ece9f2; display: flex; justify-content: space-between; color: #a09cab; font-size: 8pt; }
+  .page-break { break-before: page; }
+  @media print {
+    body { background: #fff; }
+    .print-bar { display: none; }
+    .report-shell { padding: 0; }
+    .report { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+    .section { break-inside: avoid; }
+    .two-col { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+  <div class="print-bar no-print">
+    <span>项目周报 · ${escapeHtml(list.name)} · ${escapeHtml(rangeLabelCN(start, end))}</span>
+    <button onclick="window.print()">打印 / 另存为 PDF</button>
+  </div>
+  <div class="report-shell">
+    <article class="report">
+      <header class="report-header">
+        <div>
+          <div class="kicker">PROJECT WEEKLY REPORT</div>
+          <h1>${escapeHtml(list.name)}</h1>
+          <div class="report-meta">${escapeHtml(list.workspace_name || '')} / ${escapeHtml(list.space_name || '')}${list.folder_name ? ` / ${escapeHtml(list.folder_name)}` : ''}</div>
+        </div>
+        <div class="report-period">
+          <strong>${escapeHtml(rangeLabelCN(start, end))}</strong>
+          <span>生成于 ${escapeHtml(formatReportTime(new Date().toISOString()))}</span>
+        </div>
+      </header>
+
+      <section class="section">
+        <h2>项目概览</h2>
+        <div class="overview-box">${escapeHtml(list.purpose || list.description || '暂未填写项目背景与目的。')}</div>
+        <div class="summary-link">当前阶段：${currentPhase ? `${escapeHtml(currentPhase.name)}（${escapeHtml(shortDateCN(currentPhase.start_date))} — ${escapeHtml(shortDateCN(currentPhase.end_date))}）` : '未设置'} · 项目整体完成度 ${completion}%</div>
+        <div class="progress-track"><i style="width:${completion}%"></i></div>
+      </section>
+
+      <section class="section">
+        <h2>本周摘要 <span>${escapeHtml(start)} 至 ${escapeHtml(end)}</span></h2>
+        <div class="summary-grid">
+          <div class="summary-card"><span>本周完成</span><strong>${completed.length}</strong><em>个任务</em></div>
+          <div class="summary-card"><span>进行中</span><strong>${active.length}</strong><em>个任务</em></div>
+          <div class="summary-card"><span>风险 / 逾期</span><strong>${risks.length}</strong><em>个任务</em></div>
+          <div class="summary-card"><span>本周进展</span><strong>${progress.length}</strong><em>条记录</em></div>
+        </div>
+        <p class="summary-link">${escapeHtml(summaryLine)}${achievedMilestones.length ? ` 本周达成 ${achievedMilestones.length} 个里程碑。` : ''}${nextMilestones.length ? ` 下周还有 ${nextMilestones.length} 个里程碑节点。` : ''}</p>
+      </section>
+
+      <section class="section">
+        <h2>本周完成 <span>${completed.length} 个</span></h2>
+        ${taskTable(completed, 'completed')}
+      </section>
+
+      <section class="section">
+        <h2>进行中 <span>${active.length} 个</span></h2>
+        ${taskTable(active, 'active')}
+      </section>
+
+      <section class="section">
+        <h2>风险与逾期 <span>${risks.length} 个</span></h2>
+        ${taskTable(risks, 'risk')}
+      </section>
+
+      <section class="section">
+        <h2>阶段与里程碑</h2>
+        <div class="report-subhead">项目阶段</div>
+        ${phaseRows}
+        <div class="report-subhead">里程碑</div>
+        ${milestoneRows}
+      </section>
+
+      <section class="section">
+        <h2>下周计划 <span>${escapeHtml(nextStart)} 至 ${escapeHtml(nextEnd)}</span></h2>
+        ${
+          nextWeekRows.length
+            ? `<table><thead><tr><th>日期</th><th>类型</th><th>事项</th><th>说明</th></tr></thead><tbody>${nextWeekRows
+                .map(
+                  (item) => `<tr><td>${escapeHtml(shortDateCN(item.date))}</td><td>${escapeHtml(item.type)}</td><td class="task-name">${escapeHtml(item.title)}</td><td>${escapeHtml(item.meta)}</td></tr>`
+                )
+                .join('')}</tbody></table>`
+            : '<p class="empty-block">下周还没有明确安排的任务或里程碑。</p>'
+        }
+      </section>
+
+      <section class="section">
+        <h2>进展记录 <span>${progress.length} 条</span></h2>
+        ${progressHtml}
+      </section>
+
+      <footer class="report-footer">
+        <span>ClickUp 本地版 · 项目周报</span>
+        <span>${escapeHtml(list.name)} · ${escapeHtml(rangeLabelCN(start, end))}</span>
+      </footer>
+    </article>
+  </div>
+</body>
+</html>`;
+    res.set('Cache-Control', 'no-store');
+    res.type('html').send(html);
+  });
+
+  router.get('/portfolio', (req, res) => {
+    const { workspace } = getWorkspaceOrFirst(req.user.id, req.query.workspaceId);
+    if (!workspace) return res.json({ workspace: null, projects: [], totals: null });
+    const today = todayStr();
+    const lists = db
+      .prepare(
+        `SELECT l.*, s.name AS space_name, s.color AS space_color, s.icon AS space_icon, f.name AS folder_name
+         FROM lists l JOIN spaces s ON s.id = l.space_id
+         LEFT JOIN folders f ON f.id = l.folder_id
+         WHERE s.workspace_id = ? ORDER BY s.order_index, l.order_index, l.created_at`
+      )
+      .all(workspace.id);
+    const projects = lists.map((list) => {
+      const tasks = db
+        .prepare(
+          `SELECT t.id, t.due_date, t.priority, t.updated_at, st.type AS status_type
+           FROM tasks t LEFT JOIN statuses st ON st.id = t.status_id
+           WHERE t.list_id = ? AND t.archived = 0 AND t.parent_id IS NULL`
+        )
+        .all(list.id);
+      const taskTotal = tasks.length;
+      const taskDone = tasks.filter((task) => ['done', 'closed'].includes(task.status_type)).length;
+      const openTasks = tasks.filter((task) => !['done', 'closed'].includes(task.status_type));
+      const overdueTasks = openTasks.filter((task) => task.due_date && task.due_date < today).length;
+      const milestones = db
+        .prepare('SELECT * FROM milestones WHERE list_id = ? ORDER BY due_date')
+        .all(list.id);
+      const milestoneDone = milestones.filter((milestone) => milestone.completed).length;
+      const overdueMilestones = milestones.filter(
+        (milestone) => !milestone.completed && milestone.due_date < today
+      ).length;
+      const nextMilestone =
+        milestones.find((milestone) => !milestone.completed && milestone.due_date >= today) ||
+        milestones.find((milestone) => !milestone.completed) ||
+        null;
+      const phases = db
+        .prepare('SELECT * FROM project_phases WHERE list_id = ? ORDER BY start_date')
+        .all(list.id);
+      const currentPhase = phases.find((phase) => phase.start_date <= today && phase.end_date >= today) || null;
+      const lastActivity = tasks.reduce(
+        (latest, task) => (task.updated_at && task.updated_at > latest ? task.updated_at : latest),
+        list.created_at || ''
+      );
+      const completion = taskTotal ? Math.round((taskDone / taskTotal) * 100) : 0;
+      const health = overdueTasks || overdueMilestones ? 'risk' : completion < 40 && openTasks.length ? 'attention' : 'healthy';
+      return {
+        id: list.id,
+        name: list.name,
+        icon: list.icon,
+        color: list.color,
+        description: list.description || '',
+        space_id: list.space_id,
+        space_name: list.space_name,
+        space_color: list.space_color,
+        space_icon: list.space_icon,
+        folder_name: list.folder_name || null,
+        task_total: taskTotal,
+        task_done: taskDone,
+        task_open: openTasks.length,
+        task_overdue: overdueTasks,
+        completion,
+        milestone_total: milestones.length,
+        milestone_done: milestoneDone,
+        milestone_overdue: overdueMilestones,
+        milestone_next: nextMilestone
+          ? { name: nextMilestone.name, due_date: nextMilestone.due_date, days_left: dayDiff(today, nextMilestone.due_date) }
+          : null,
+        phase_current: currentPhase
+          ? { name: currentPhase.name, color: currentPhase.color, start_date: currentPhase.start_date, end_date: currentPhase.end_date }
+          : null,
+        health,
+        last_activity: lastActivity,
+      };
+    });
+    const totals = projects.reduce(
+      (result, project) => ({
+        project_count: result.project_count + 1,
+        task_total: result.task_total + project.task_total,
+        task_done: result.task_done + project.task_done,
+        task_overdue: result.task_overdue + project.task_overdue,
+        milestone_total: result.milestone_total + project.milestone_total,
+        milestone_done: result.milestone_done + project.milestone_done,
+        risk_count: result.risk_count + (project.health === 'risk' ? 1 : 0),
+      }),
+      { project_count: 0, task_total: 0, task_done: 0, task_overdue: 0, milestone_total: 0, milestone_done: 0, risk_count: 0 }
+    );
+    totals.completion = totals.task_total ? Math.round((totals.task_done / totals.task_total) * 100) : 0;
+    res.json({ workspace, projects, totals });
+  });
+
   router.get('/lists/:id', (req, res) => {
     const list = accessibleList(req.params.id, req.user.id);
     if (!list) return res.status(404).json({ error: '列表不存在' });
@@ -877,6 +1341,22 @@ export function createApiRouter() {
     res.status(201).json({ id, task_id: task.id, name, items: [] });
   });
 
+  router.patch('/checklists/:id', (req, res) => {
+    const checklist = db
+      .prepare(
+        `SELECT c.*, s.workspace_id FROM checklists c JOIN tasks t ON t.id = c.task_id
+         JOIN lists l ON l.id = t.list_id JOIN spaces s ON s.id = l.space_id WHERE c.id = ?`
+      )
+      .get(req.params.id);
+    if (!checklist || !workspaceRole(checklist.workspace_id, req.user.id)) {
+      return res.status(404).json({ error: '清单不存在' });
+    }
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: '清单名称不能为空' });
+    db.prepare('UPDATE checklists SET name = ? WHERE id = ?').run(name, checklist.id);
+    res.json(db.prepare('SELECT * FROM checklists WHERE id = ?').get(checklist.id));
+  });
+
   router.delete('/checklists/:id', (req, res) => {
     const checklist = db
       .prepare(
@@ -1035,7 +1515,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.4.2',
+      version: '1.5.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,

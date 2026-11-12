@@ -5,6 +5,7 @@ import {
   FileText,
   Folder as FolderIcon,
   Home,
+  Boxes,
   Inbox,
   LayoutTemplate,
   MoreHorizontal,
@@ -354,6 +355,10 @@ export default function Sidebar({ open, onClose }) {
               <span className="nav-badge">{bootstrap.unread_count > 99 ? '99+' : bootstrap.unread_count}</span>
             )}
           </button>
+          <button type="button" className={`sidebar-nav ${route.type === 'portfolio' ? 'is-active' : ''}`} onClick={() => navigate('/portfolio')}>
+            <Boxes size={17} />
+            <span>项目组合</span>
+          </button>
         </div>
 
         <div className="sidebar-scroll">
@@ -573,7 +578,7 @@ export default function Sidebar({ open, onClose }) {
               <Settings size={16} />
             </IconButton>
           </div>
-          <div className="sidebar-version">ClickUp Local v1.4 · 数据保存在本机</div>
+          <div className="sidebar-version">ClickUp Local v1.5 · 数据保存在本机</div>
         </div>
       </aside>
 
