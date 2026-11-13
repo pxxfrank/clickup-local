@@ -5,7 +5,7 @@ import { StatusDot } from './ui.jsx';
 
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
-export default function CalendarView({ tasks, statuses, onOpenTask, onAddTask }) {
+export default function CalendarView({ tasks, statuses, onOpenTask, onAddTask, showAdd = true, maxUndated = 6 }) {
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = useState(null);
 
@@ -61,17 +61,19 @@ export default function CalendarView({ tasks, statuses, onOpenTask, onAddTask })
               >
                 <div className="calendar-day-head">
                   <span className="calendar-day-num">{format(day, 'd')}</span>
-                  <button
-                    type="button"
-                    className="calendar-day-add"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onAddTask(key);
-                    }}
-                    title="在这一天新建任务"
-                  >
-                    <Plus size={13} />
-                  </button>
+                  {showAdd && (
+                    <button
+                      type="button"
+                      className="calendar-day-add"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onAddTask?.(key);
+                      }}
+                      title="在这一天新建任务"
+                    >
+                      <Plus size={13} />
+                    </button>
+                  )}
                 </div>
                 <div className="calendar-day-tasks">
                   {dayTasks.slice(0, 3).map((task) => (
@@ -137,7 +139,7 @@ export default function CalendarView({ tasks, statuses, onOpenTask, onAddTask })
           <div className="calendar-undated">
             <h4>未设置日期 <span>{undated.length}</span></h4>
             <div className="calendar-undated-list">
-              {undated.slice(0, 6).map((task) => (
+              {undated.slice(0, maxUndated).map((task) => (
                 <button type="button" key={task.id} onClick={() => onOpenTask(task.id)}>
                   <StatusDot color={task.status?.color} size={7} />
                   {task.name}

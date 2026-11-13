@@ -92,6 +92,21 @@
     grid-template-columns: 1fr;
   }
 
+  .home-schedule-body .calendar-view {
+    height: 520px;
+  }
+
+  .home-schedule-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .home-schedule-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .weekly-panel {
     order: 3;
   }

@@ -3,11 +3,13 @@ import {
   ArrowRight,
   ArrowUpRight,
   CalendarClock,
+  CalendarDays,
   CheckCircle2,
   CircleDashed,
   Clock3,
   Flame,
   ListChecks,
+  ListOrdered,
   Plus,
   Sparkles,
   TrendingUp,
@@ -16,6 +18,8 @@ import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { format, formatDateSmart, greeting, parseDateValue, relativeTime, zhCN } from '../lib/date.js';
 import { Avatar, DueBadge, EmptyState, PriorityFlag, ProgressBar, Spinner } from './ui.jsx';
+import CalendarView from './CalendarView.jsx';
+import HomeTimeline from './HomeTimeline.jsx';
 
 const STAT_CARDS = [
   { key: 'open', label: '待办任务', icon: CircleDashed, tone: 'violet', hint: '所有未完成的工作' },
@@ -28,6 +32,7 @@ export default function HomePage() {
   const { bootstrap, dataVersion, openTask, openCreateTask, navigate, toast } = useApp();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [scheduleView, setScheduleView] = useState('calendar');
 
   useEffect(() => {
     let cancelled = false;
@@ -133,6 +138,47 @@ export default function HomePage() {
             </div>
           );
         })}
+      </section>
+
+      <section className="panel home-schedule-panel">
+        <div className="panel-head home-schedule-head">
+          <div>
+            <h2>全部任务日程</h2>
+            <p>用日历或时间轴查看工作空间内的所有任务，包括子任务和已完成任务</p>
+          </div>
+          <div className="home-schedule-actions">
+            <span className="home-schedule-count">{data.schedule_tasks?.length || 0} 个任务</span>
+            <div className="home-schedule-toggle">
+              <button
+                type="button"
+                className={scheduleView === 'calendar' ? 'is-active' : ''}
+                onClick={() => setScheduleView('calendar')}
+              >
+                <CalendarDays size={14} /> 日历
+              </button>
+              <button
+                type="button"
+                className={scheduleView === 'timeline' ? 'is-active' : ''}
+                onClick={() => setScheduleView('timeline')}
+              >
+                <ListOrdered size={14} /> 时间轴
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="home-schedule-body">
+          {scheduleView === 'calendar' ? (
+            <CalendarView
+              tasks={data.schedule_tasks || []}
+              statuses={[]}
+              onOpenTask={openTask}
+              showAdd={false}
+              maxUndated={100}
+            />
+          ) : (
+            <HomeTimeline tasks={data.schedule_tasks || []} onOpenTask={openTask} />
+          )}
+        </div>
       </section>
 
       <div className="home-grid">

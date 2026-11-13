@@ -32,7 +32,7 @@ import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { formatDate, formatDateSmart, formatBytes, formatDateTime, parseDateValue } from '../lib/date.js';
 import { renderMarkdown } from '../lib/markdown.js';
-import DependencyGraphModal from './DependencyGraphModal.jsx';
+import DependencyGraphModal, { DependencyGraphCanvas } from './DependencyGraphModal.jsx';
 import {
   Avatar,
   ConfirmDialog,
@@ -711,16 +711,6 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                       <p className="participant-hint">参与人会收到任务上下文，但负责人仍然只有一位。</p>
                     </Popover>
 
-                    <button
-                      type="button"
-                      className={`quick-pill ${detail.dependencies?.length ? '' : 'is-empty'}`}
-                      onClick={() => setDependencyGraphOpen(true)}
-                    >
-                      <GitBranch size={15} />
-                      {detail.dependencies?.length ? `依赖关系 ${detail.dependencies.length}` : '依赖关系'}
-                      <ChevronDown size={13} />
-                    </button>
-
                     <Popover
                       width={260}
                       trigger={
@@ -938,6 +928,19 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                           <Pencil size={14} /> 添加任务描述，记录背景、验收标准或备注…
                         </button>
                       )}
+                    </section>
+
+                    <section className="drawer-section dependency-drawer-section">
+                      <div className="drawer-section-head">
+                        <h3>
+                          依赖关系
+                          {detail.dependencies?.length > 0 && <span className="section-count">{detail.dependencies.length}</span>}
+                        </h3>
+                        <button type="button" className="section-action" onClick={() => setDependencyGraphOpen(true)}>
+                          <GitBranch size={13} /> 编辑依赖
+                        </button>
+                      </div>
+                      <DependencyGraphCanvas task={detail} tasks={dependencyTasks} compact />
                     </section>
 
                     {detail.fields?.length > 0 && (

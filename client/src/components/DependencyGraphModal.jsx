@@ -255,3 +255,74 @@ export default function DependencyGraphModal({ open, onClose, task, tasks, onTog
     </Modal>
   );
 }
+
+export function DependencyGraphCanvas({ task, tasks, compact = false }) {
+  const graph = useMemo(() => (task ? buildGraph(task, tasks || []) : null), [task, tasks]);
+  const directDependencyIds = new Set((task?.dependencies || []).map((dependency) => dependency.id));
+  const directDependents = (tasks || []).filter((item) =>
+    (item.dependency_ids || []).includes(task?.id)
+  );
+  if (!task || !graph) return null;
+  const arrowId = compact ? 'dependency-arrow-inline' : 'dependency-arrow-canvas';
+  if (graph.nodes.length === 1) {
+    return (
+      <div className={`dependency-graph-empty ${compact ? 'is-compact' : ''}`}>
+        <GitBranch size={22} />
+        <h3>还没有依赖关系</h3>
+        <p>点击「编辑依赖」添加一个或多个前置任务。</p>
+      </div>
+    );
+  }
+  return (
+    <>
+      <div className={`dependency-graph-scroll ${compact ? 'is-compact' : ''}`}>
+        <div className="dependency-graph-canvas" style={{ width: graph.width, height: graph.height }}>
+          <svg width={graph.width} height={graph.height} aria-hidden="true">
+            <defs>
+              <marker id={arrowId} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                <path d="M0,0 L7,3.5 L0,7 Z" />
+              </marker>
+            </defs>
+            {graph.links.map((link) => (
+              <path
+                key={`${link.source}-${link.target}`}
+                d={link.d}
+                markerEnd={`url(#${arrowId})`}
+                className={link.target === task.id || link.source === task.id ? 'is-direct' : ''}
+              />
+            ))}
+          </svg>
+          {graph.nodes.map((node) => {
+            const position = graph.positions.get(node.id);
+            const isCurrent = node.id === task.id;
+            const isDependency = directDependencyIds.has(node.id);
+            const isDependent = directDependents.some((dependent) => dependent.id === node.id);
+            return (
+              <div
+                className={`dependency-node ${isCurrent ? 'is-current' : ''} ${isDependency ? 'is-upstream' : ''} ${isDependent ? 'is-downstream' : ''}`}
+                key={node.id}
+                style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
+              >
+                <div className="dependency-node-top">
+                  <span className="status-dot" style={{ background: node.status?.color || '#87909e' }} />
+                  <strong>{node.name}</strong>
+                  {isCurrent && <em>当前</em>}
+                </div>
+                <div className="dependency-node-meta">
+                  <span>{node.status?.name || '未设置状态'}</span>
+                  {node.due_date && <span>{formatDateSmart(node.due_date)}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="dependency-graph-legend">
+        <span><i className="is-upstream" /> 前置任务</span>
+        <span><i className="is-current" /> 当前任务</span>
+        <span><i className="is-downstream" /> 后续任务</span>
+        <span><MoveRight size={12} /> 箭头方向：前置 → 后续</span>
+      </div>
+    </>
+  );
+}

@@ -1903,7 +1903,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.8.0',
+      version: '1.9.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -2042,6 +2042,41 @@ export function createApiRouter() {
                        u.name AS assignee_name, u.color AS assignee_color, u.id AS assignee_id
                 ${base}`)
       .all(workspace.id);
+    const scheduleRows = db
+      .prepare(
+        `SELECT t.id, t.name, t.start_date, t.due_date, t.priority, t.completed_at, t.created_at, t.parent_id,
+                t.status_id, st.name AS status_name, st.color AS status_color, st.type AS status_type,
+                l.id AS list_id, l.name AS list_name, l.color AS list_color,
+                sp.id AS space_id, sp.name AS space_name,
+                u.id AS assignee_id, u.name AS assignee_name, u.color AS assignee_color
+         FROM tasks t JOIN lists l ON l.id = t.list_id JOIN spaces sp ON sp.id = l.space_id
+         JOIN statuses st ON st.id = t.status_id
+         LEFT JOIN users u ON u.id = t.assignee_id
+         WHERE sp.workspace_id = ? AND t.archived = 0
+         ORDER BY COALESCE(t.due_date, t.start_date) ASC, t.order_index ASC`
+      )
+      .all(workspace.id);
+    const scheduleTasks = scheduleRows.map((task) => ({
+      id: task.id,
+      name: task.name,
+      start_date: task.start_date,
+      due_date: task.due_date,
+      priority: task.priority,
+      completed_at: task.completed_at,
+      created_at: task.created_at,
+      parent_id: task.parent_id,
+      status: {
+        id: task.status_id,
+        name: task.status_name,
+        color: task.status_color,
+        type: task.status_type,
+      },
+      list: { id: task.list_id, name: task.list_name, color: task.list_color },
+      space: { id: task.space_id, name: task.space_name },
+      assignee: task.assignee_id
+        ? { id: task.assignee_id, name: task.assignee_name, color: task.assignee_color }
+        : null,
+    }));
     const open = all.filter((task) => !['done', 'closed'].includes(task.status_type));
     const completed = all.filter((task) => ['done', 'closed'].includes(task.status_type));
     const overdue = open.filter((task) => task.due_date && task.due_date < today);
@@ -2093,6 +2128,7 @@ export function createApiRouter() {
       activity,
       workload,
       completed_series: completedSeries,
+      schedule_tasks: scheduleTasks,
     });
   });
 

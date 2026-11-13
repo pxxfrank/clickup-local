@@ -918,6 +918,31 @@
   font-size: 8.5px;
 }
 
+.dependency-graph-scroll.is-compact {
+  max-height: 258px;
+  border-color: #eceaf3;
+}
+
+.dependency-graph-empty.is-compact {
+  min-height: 94px;
+  padding: 15px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: #fcfcfe;
+}
+
+.dependency-graph-empty.is-compact h3 {
+  font-size: 11px;
+}
+
+.dependency-graph-empty.is-compact p {
+  font-size: 9px;
+}
+
+.dependency-drawer-section .dependency-graph-legend {
+  padding-top: 7px;
+}
+
 .dependency-graph-empty {
   display: flex;
   flex-direction: column;
