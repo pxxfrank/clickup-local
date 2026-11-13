@@ -31,8 +31,9 @@ import {
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { formatDate, formatDateSmart, formatBytes, formatDateTime, parseDateValue } from '../lib/date.js';
-import { renderMarkdown } from '../lib/markdown.js';
+import { renderMarkdownWithTasks } from '../lib/markdown.js';
 import DependencyGraphModal, { DependencyGraphCanvas } from './DependencyGraphModal.jsx';
+import MarkdownEditor from './MarkdownEditor.jsx';
 import {
   Avatar,
   ConfirmDialog,
@@ -186,7 +187,10 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
     return () => cancelAnimationFrame(timer);
   }, [titleDraft, detail?.id, tab]);
 
-  const renderedDescription = useMemo(() => renderMarkdown(detail?.description || ''), [detail?.description]);
+  const renderedDescription = useMemo(
+    () => renderMarkdownWithTasks(detail?.description || '', dependencyTasks),
+    [detail?.description, dependencyTasks]
+  );
 
   async function patchTask(patch, options = {}) {
     if (!detail) return null;
@@ -923,16 +927,16 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                       </div>
                       {editingDescription ? (
                         <div className="description-editor">
-                          <textarea
-                            className="description-textarea"
+                          <MarkdownEditor
                             value={descriptionDraft}
-                            onChange={(event) => setDescriptionDraft(event.target.value)}
-                            placeholder="添加描述，支持 Markdown 格式…"
-                            autoFocus
+                            onChange={setDescriptionDraft}
+                            tasks={dependencyTasks}
+                            onOpenTask={onOpenTask}
+                            placeholder="添加背景、验收标准或备注…（支持 Markdown 和任务引用）"
                             rows={6}
                           />
                           <div className="description-editor-foot">
-                            <span>支持 Markdown · 自动渲染预览</span>
+                            <span>支持 Markdown · 输入即预览</span>
                             <div>
                               <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setEditingDescription(false); setDescriptionDraft(detail.description || ''); }}>
                                 取消
@@ -942,7 +946,15 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                           </div>
                         </div>
                       ) : detail.description ? (
-                        <div className="description-rendered markdown-body" dangerouslySetInnerHTML={{ __html: renderedDescription }} onClick={() => setEditingDescription(true)} />
+                        <div
+                          className="description-rendered markdown-body"
+                          dangerouslySetInnerHTML={{ __html: renderedDescription }}
+                          onClick={(event) => {
+                            const reference = event.target.closest?.('.task-reference');
+                            if (reference?.dataset.taskId) onOpenTask?.(reference.dataset.taskId);
+                            else setEditingDescription(true);
+                          }}
+                        />
                       ) : (
                         <button type="button" className="description-empty" onClick={() => setEditingDescription(true)}>
                           <Pencil size={14} /> 添加任务描述，记录背景、验收标准或备注…

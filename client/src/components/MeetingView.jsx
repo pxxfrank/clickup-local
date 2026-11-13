@@ -14,13 +14,22 @@ import {
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { format } from '../lib/date.js';
-import { ConfirmDialog, EmptyState, Modal, Spinner } from './ui.jsx';
+import { taskReferenceText } from '../lib/markdown.js';
+import { ConfirmDialog, EmptyState, MenuItem, Modal, Popover, Spinner } from './ui.jsx';
+import MarkdownEditor from './MarkdownEditor.jsx';
 
 function formatMeetingTime(value) {
   if (!value) return '未设置时间';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return format(date, 'yyyy年M月d日 HH:mm');
+}
+
+function roundToQuarter() {
+  const date = new Date();
+  date.setSeconds(0, 0);
+  date.setMinutes(Math.ceil(date.getMinutes() / 15) * 15);
+  return format(date, "yyyy-MM-dd'T'HH:mm");
 }
 
 function timeInputValue(value) {
@@ -43,7 +52,8 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-function meetingMarkdown(meeting) {
+function meetingMarkdown(meeting, tasks = []) {
+  const text = (value) => taskReferenceText(value || '', tasks);
   const lines = [
     `# ${meeting.title || '未命名会议'}`,
     '',
@@ -52,11 +62,11 @@ function meetingMarkdown(meeting) {
     '',
     '## 会议目标',
     '',
-    meeting.goals || '未填写',
+    text(meeting.goals) || '未填写',
     '',
     '## 需要讲的内容',
     '',
-    meeting.content || '未填写',
+    text(meeting.content) || '未填写',
     '',
     '## 需要解决的问题',
     '',
@@ -64,28 +74,40 @@ function meetingMarkdown(meeting) {
   if (!meeting.discuss_issues?.length) lines.push('无');
   else {
     meeting.discuss_issues.forEach((issue, index) => {
-      lines.push(`${index + 1}. ${issue.content}`);
+      lines.push(`${index + 1}. ${text(issue.content)}`);
       if (issue.task_name) lines.push(`   - 关联任务：${issue.task_name}`);
     });
   }
+  lines.push('', '## 关联任务', '');
+  if (!meeting.bound_tasks?.length) lines.push('无');
+  else meeting.bound_tasks.forEach((task) => lines.push(`- ${task.name}`));
   lines.push('', '## 遗留问题', '');
   if (!meeting.followup_issues?.length) lines.push('无');
   else {
     meeting.followup_issues.forEach((issue, index) => {
-      lines.push(`${index + 1}. ${issue.content}`);
+      lines.push(`${index + 1}. ${text(issue.content)}`);
       if (issue.task_name) lines.push(`   - 已转为任务：${issue.task_name}`);
     });
   }
   return lines.join('\n');
 }
 
-function meetingWordHtml(meeting) {
+function meetingWordHtml(meeting, tasks = []) {
+  const richText = (value) => {
+    const escaped = escapeHtml(value || '');
+    return escaped
+      .replace(/\[\[task:([^\]]+)\]\]/g, (match, taskId) => {
+        const task = tasks.find((item) => item.id === taskId);
+        return task ? `<span class="task-ref">▣ ${escapeHtml(task.name)}</span>` : match;
+      })
+      .replace(/\n/g, '<br>');
+  };
   const list = (items) =>
     items?.length
       ? `<ol>${items
           .map(
             (issue) =>
-              `<li>${escapeHtml(issue.content)}${
+              `<li>${richText(issue.content)}${
                 issue.task_name ? `<span class="linked">关联任务：${escapeHtml(issue.task_name)}</span>` : ''
               }</li>`
           )
@@ -97,13 +119,14 @@ function meetingWordHtml(meeting) {
     h1{font-size:22pt;margin:0 0 8pt;} h2{font-size:14pt;margin:22pt 0 8pt;border-bottom:1px solid #ddd;padding-bottom:4pt;}
     .meta{color:#666;font-size:10pt;margin-bottom:18pt;} .meta span{margin-right:20px;}
     p{white-space:pre-wrap;} li{margin-bottom:6pt;} .linked{display:block;color:#6c5ce7;font-size:9.5pt;}
-    .empty{color:#999;} ol{padding-left:22pt;}
+    .empty{color:#999;} ol{padding-left:22pt;} .task-ref{color:#2f6fd6;background:#eef5ff;padding:1px 5px;border-radius:3px;font-size:10pt;}
   </style></head><body>
   <h1>${escapeHtml(meeting.title || '未命名会议')}</h1>
   <div class="meta"><span>时间：${escapeHtml(formatMeetingTime(meeting.meeting_at))}</span><span>与会人：${escapeHtml(meeting.participants || '未填写')}</span></div>
-  <h2>会议目标</h2><p>${escapeHtml(meeting.goals || '未填写')}</p>
-  <h2>需要讲的内容</h2><p>${escapeHtml(meeting.content || '未填写')}</p>
+  <h2>会议目标</h2><p>${richText(meeting.goals || '未填写')}</p>
+  <h2>需要讲的内容</h2><p>${richText(meeting.content || '未填写')}</p>
   <h2>需要解决的问题</h2>${list(meeting.discuss_issues)}
+  <h2>关联任务</h2>${meeting.bound_tasks?.length ? `<ul>${meeting.bound_tasks.map((task) => `<li>${escapeHtml(task.name)}</li>`).join('')}</ul>` : '<p class="empty">无</p>'}
   <h2>遗留问题</h2>${list(meeting.followup_issues)}
   </body></html>`;
 }
@@ -147,7 +170,7 @@ export default function MeetingView({ list, tasks, onOpenTask, onChanged }) {
       id: null,
       list_id: list.id,
       title: '',
-      meeting_at: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+      meeting_at: roundToQuarter(),
       participants: '',
       goals: '',
       content: '',
@@ -184,11 +207,11 @@ export default function MeetingView({ list, tasks, onOpenTask, onChanged }) {
     try {
       const detail = meeting.discuss_issues && meeting.followup_issues ? meeting : await api.get(`/meetings/${meeting.id}`);
       if (kind === 'markdown') {
-        downloadText(`${sanitizeFilename(detail.title)}.md`, meetingMarkdown(detail), 'text/markdown;charset=utf-8');
+        downloadText(`${sanitizeFilename(detail.title)}.md`, meetingMarkdown(detail, tasks), 'text/markdown;charset=utf-8');
       } else {
         downloadText(
           `${sanitizeFilename(detail.title)}.doc`,
-          meetingWordHtml(detail),
+          meetingWordHtml(detail, tasks),
           'application/msword;charset=utf-8'
         );
       }
@@ -350,6 +373,9 @@ function MeetingEditor({ meeting, tasks, onOpenTask, onSaved, onChanged, toast }
   }));
   const [saving, setSaving] = useState(false);
   const [converting, setConverting] = useState(null);
+  const [boundTaskIds, setBoundTaskIds] = useState(
+    () => new Set((meeting.bound_tasks || []).map((task) => task.id))
+  );
 
   function updateIssue(kind, index, patch) {
     setDraft((current) => ({
@@ -389,6 +415,7 @@ function MeetingEditor({ meeting, tasks, onOpenTask, onSaved, onChanged, toast }
         followup_issues: draft.followup_issues
           .filter((issue) => issue.content.trim())
           .map((issue) => ({ content: issue.content.trim(), task_id: issue.task_id || null })),
+        task_ids: [...boundTaskIds],
       };
       const saved = draft.id ? await api.patch(`/meetings/${draft.id}`, payload) : await api.post(`/lists/${meeting.list_id}/meetings`, payload);
       setDraft({
@@ -397,6 +424,7 @@ function MeetingEditor({ meeting, tasks, onOpenTask, onSaved, onChanged, toast }
         discuss_issues: (saved.discuss_issues || []).map((issue) => ({ ...issue })),
         followup_issues: (saved.followup_issues || []).map((issue) => ({ ...issue })),
       });
+      setBoundTaskIds(new Set((saved.bound_tasks || []).map((task) => task.id)));
       onSaved(saved);
       toast('会议已保存');
     } catch (error) {
@@ -419,6 +447,7 @@ function MeetingEditor({ meeting, tasks, onOpenTask, onSaved, onChanged, toast }
         followup_issues: result.meeting.followup_issues.map((item) => ({ ...item })),
         discuss_issues: result.meeting.discuss_issues.map((item) => ({ ...item })),
       }));
+      setBoundTaskIds(new Set((result.meeting.bound_tasks || []).map((task) => task.id)));
       onChanged?.();
       toast('遗留问题已转为任务');
     } catch (error) {
@@ -432,6 +461,20 @@ function MeetingEditor({ meeting, tasks, onOpenTask, onSaved, onChanged, toast }
     () => [...(tasks || [])].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')),
     [tasks]
   );
+  const boundTasks = taskOptions.filter((task) => boundTaskIds.has(task.id));
+  const availableTasks = taskOptions.filter((task) => !boundTaskIds.has(task.id));
+
+  function addBoundTask(taskId) {
+    setBoundTaskIds((current) => new Set([...current, taskId]));
+  }
+
+  function removeBoundTask(taskId) {
+    setBoundTaskIds((current) => {
+      const next = new Set(current);
+      next.delete(taskId);
+      return next;
+    });
+  }
 
   return (
     <form className="meeting-form" id="meeting-form" onSubmit={save}>
@@ -450,9 +493,23 @@ function MeetingEditor({ meeting, tasks, onOpenTask, onSaved, onChanged, toast }
           <span className="field-label">会议时间</span>
           <input
             type="datetime-local"
+            step={900}
             className="input"
             value={draft.meeting_at || ''}
-            onChange={(event) => setDraft({ ...draft, meeting_at: event.target.value })}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (!value) {
+                setDraft({ ...draft, meeting_at: value });
+                return;
+              }
+              const date = new Date(value);
+              if (Number.isNaN(date.getTime())) {
+                setDraft({ ...draft, meeting_at: value });
+                return;
+              }
+              date.setMinutes(Math.round(date.getMinutes() / 15) * 15, 0, 0);
+              setDraft({ ...draft, meeting_at: format(date, "yyyy-MM-dd'T'HH:mm") });
+            }}
           />
         </label>
       </div>
@@ -476,27 +533,66 @@ function MeetingEditor({ meeting, tasks, onOpenTask, onSaved, onChanged, toast }
             placeholder="这场会议希望达成什么？"
           />
         </label>
-        <label className="field">
+        <div className="field">
           <span className="field-label"><FileText size={12} /> 需要讲的内容</span>
-          <textarea
-            className="input meeting-textarea"
-            rows={4}
+          <MarkdownEditor
             value={draft.content || ''}
-            onChange={(event) => setDraft({ ...draft, content: event.target.value })}
-            placeholder="议程、汇报内容、演示要点…"
+            onChange={(value) => setDraft({ ...draft, content: value })}
+            tasks={tasks}
+            onOpenTask={onOpenTask}
+            placeholder="议程、汇报内容、演示要点…（支持 Markdown 和任务引用）"
+            rows={5}
           />
-        </label>
+        </div>
       </div>
 
       <div className="meeting-issues-grid">
         <section className="meeting-issue-box">
           <div className="meeting-issue-head">
             <h3><Link2 size={13} /> 需要解决的问题 <span>{draft.discuss_issues.length}</span></h3>
-            <button type="button" className="section-action" onClick={() => addIssue('discuss_issues')}>
-              <Plus size={12} /> 添加
-            </button>
+            <div className="meeting-issue-actions">
+              <Popover
+                width={286}
+                align="right"
+                trigger={
+                  <button type="button" className="section-action">
+                    <Link2 size={12} /> 绑定现有任务
+                  </button>
+                }
+              >
+                <div className="menu-label">绑定当前项目中的任务</div>
+                {availableTasks.map((task) => (
+                  <MenuItem
+                    key={task.id}
+                    icon={<span className="status-dot" style={{ background: task.status?.color || '#87909e' }} />}
+                    onClick={() => addBoundTask(task.id)}
+                  >
+                    {task.name}
+                  </MenuItem>
+                ))}
+                {!availableTasks.length && <p className="participant-hint">所有任务都已绑定。</p>}
+                <p className="participant-hint">可以绑定多个任务，保存会议后生效。</p>
+              </Popover>
+              <button type="button" className="section-action" onClick={() => addIssue('discuss_issues')}>
+                <Plus size={12} /> 添加
+              </button>
+            </div>
           </div>
-          <p className="meeting-issue-hint">每个问题可以绑定当前项目中的一个任务。</p>
+          <p className="meeting-issue-hint">绑定与本次会议问题相关的任务；每个问题也可以单独记录。</p>
+          <div className="meeting-bound-tasks">
+            {boundTasks.map((task) => (
+              <div className="meeting-bound-task" key={task.id}>
+                <button type="button" className="meeting-bound-task-name" onClick={() => onOpenTask?.(task.id)}>
+                  <span className="status-dot" style={{ background: task.status?.color || '#87909e' }} />
+                  {task.name}
+                </button>
+                <button type="button" className="meeting-bound-delete" onClick={() => removeBoundTask(task.id)} title="删除已绑定的任务">
+                  <Trash2 size={12} /> 删除
+                </button>
+              </div>
+            ))}
+            {!boundTasks.length && <p className="meeting-issue-empty">还没有绑定任务。</p>}
+          </div>
           {draft.discuss_issues.map((issue, index) => (
             <div className="meeting-issue-row" key={issue.id || `discuss-${index}`}>
               <textarea
@@ -507,23 +603,8 @@ function MeetingEditor({ meeting, tasks, onOpenTask, onSaved, onChanged, toast }
                 placeholder="需要解决的问题…"
               />
               <div className="meeting-issue-controls">
-                <select
-                  className="mini-select meeting-task-select"
-                  value={issue.task_id || ''}
-                  onChange={(event) => updateIssue('discuss_issues', index, { task_id: event.target.value || null })}
-                >
-                  <option value="">不绑定任务</option>
-                  {taskOptions.map((task) => (
-                    <option key={task.id} value={task.id}>{task.name}</option>
-                  ))}
-                </select>
-                {issue.task_name && (
-                  <button type="button" className="meeting-linked-task" onClick={() => onOpenTask?.(issue.task_id)}>
-                    {issue.task_name}
-                  </button>
-                )}
-                <button type="button" className="icon-btn icon-btn-danger" onClick={() => removeIssue('discuss_issues', index)} title="删除问题">
-                  <Trash2 size={13} />
+                <button type="button" className="meeting-delete-text" onClick={() => removeIssue('discuss_issues', index)}>
+                  <Trash2 size={12} /> 删除
                 </button>
               </div>
             </div>
@@ -538,39 +619,41 @@ function MeetingEditor({ meeting, tasks, onOpenTask, onSaved, onChanged, toast }
               <Plus size={12} /> 添加
             </button>
           </div>
-          <p className="meeting-issue-hint">遗留问题可以一键转为当前项目的新任务。</p>
-          {draft.followup_issues.map((issue, index) => (
-            <div className="meeting-issue-row" key={issue.id || `followup-${index}`}>
-              <textarea
-                rows={2}
-                className="meeting-issue-input"
-                value={issue.content}
-                onChange={(event) => updateIssue('followup_issues', index, { content: event.target.value })}
-                placeholder="尚未解决、需要后续跟进的问题…"
-              />
-              <div className="meeting-issue-controls">
-                {issue.task_name ? (
-                  <button type="button" className="meeting-linked-task" onClick={() => onOpenTask?.(issue.task_id)}>
-                    <Link2 size={11} /> {issue.task_name}
+          <p className="meeting-issue-hint">遗留问题可以一键转为当前项目的新任务；创建后仍可直接编辑。</p>
+          <div className="meeting-followup-list">
+            {draft.followup_issues.map((issue, index) => (
+              <div className="meeting-followup-row" key={issue.id || `followup-${index}`}>
+                <span className="meeting-followup-index">{index + 1}</span>
+                <input
+                  className="meeting-list-input"
+                  value={issue.content}
+                  onChange={(event) => updateIssue('followup_issues', index, { content: event.target.value })}
+                  placeholder="尚未解决、需要后续跟进的问题…"
+                />
+                <div className="meeting-followup-actions">
+                  {issue.task_name ? (
+                    <button type="button" className="meeting-followup-btn" onClick={() => onOpenTask?.(issue.task_id)}>
+                      <Link2 size={11} /> 查看任务
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="meeting-followup-btn"
+                      disabled={!issue.id || converting === issue.id}
+                      onClick={() => convertToTask(issue, index)}
+                      title={issue.id ? '将这个问题转为新任务' : '请先保存会议'}
+                    >
+                      {converting === issue.id ? <Spinner size={12} /> : <ListTodo size={12} />} 转换成任务
+                    </button>
+                  )}
+                  <button type="button" className="meeting-followup-delete" onClick={() => removeIssue('followup_issues', index)}>
+                    <Trash2 size={11} /> 删除
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm meeting-convert-btn"
-                    disabled={!issue.id || converting === issue.id}
-                    onClick={() => convertToTask(issue, index)}
-                    title={issue.id ? '将这个问题转为新任务' : '请先保存会议'}
-                  >
-                    {converting === issue.id ? <Spinner size={12} /> : <ListTodo size={12} />} 转为任务
-                  </button>
-                )}
-                <button type="button" className="icon-btn icon-btn-danger" onClick={() => removeIssue('followup_issues', index)} title="删除问题">
-                  <Trash2 size={13} />
-                </button>
+                </div>
               </div>
-            </div>
-          ))}
-          {!draft.followup_issues.length && <p className="meeting-issue-empty">还没有遗留问题。</p>}
+            ))}
+            {!draft.followup_issues.length && <p className="meeting-issue-empty">还没有遗留问题。</p>}
+          </div>
         </section>
       </div>
 

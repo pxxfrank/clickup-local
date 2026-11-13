@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { flattenLists } from '../lib/tree.js';
 import { Avatar, Modal, Spinner } from './ui.jsx';
+import MarkdownEditor from './MarkdownEditor.jsx';
 
 export default function CreateTaskModal({ defaults, onClose }) {
   const { bootstrap, refresh, navigate, openTask, toast, user } = useApp();
@@ -175,12 +176,13 @@ export default function CreateTaskModal({ defaults, onClose }) {
               <div className="create-more">
                 <label className="field">
                   <span className="field-label">描述</span>
-                  <textarea
-                    className="input textarea"
-                    rows={4}
+                  <MarkdownEditor
                     value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    placeholder="添加背景、验收标准或备注（支持 Markdown）…"
+                    onChange={setDescription}
+                    rows={4}
+                    showTaskReferences={false}
+                    className="markdown-editor-create"
+                    placeholder="添加背景、验收标准或备注…（支持 Markdown，输入即预览）"
                   />
                 </label>
               </div>

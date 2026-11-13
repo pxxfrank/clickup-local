@@ -881,6 +881,14 @@ function loadMeetingDetail(meetingId, userId) {
        ORDER BY mi.kind, mi.order_index, mi.created_at`
     )
     .all(meetingId);
+  const boundTasks = getDb()
+    .prepare(
+      `SELECT t.id, t.name, t.status_id, st.name AS status_name, st.color AS status_color
+       FROM meeting_tasks mt JOIN tasks t ON t.id = mt.task_id
+       LEFT JOIN statuses st ON st.id = t.status_id
+       WHERE mt.meeting_id = ? ORDER BY t.order_index`
+    )
+    .all(meetingId);
   const linkedTasks = getDb()
     .prepare(
       `SELECT DISTINCT t.id, t.name, t.status_id, st.name AS status_name, st.color AS status_color
@@ -896,6 +904,7 @@ function loadMeetingDetail(meetingId, userId) {
     .all(meetingId, meetingId);
   return {
     ...meeting,
+    bound_tasks: boundTasks,
     linked_tasks: linkedTasks,
     list: {
       id: meeting.list_id,
@@ -908,6 +917,23 @@ function loadMeetingDetail(meetingId, userId) {
     discuss_issues: issues.filter((issue) => issue.kind === 'discuss'),
     followup_issues: issues.filter((issue) => issue.kind === 'followup'),
   };
+}
+
+function replaceMeetingTasks(meeting, body) {
+  if (!Array.isArray(body.task_ids)) return;
+  const db = getDb();
+  db.prepare('DELETE FROM meeting_tasks WHERE meeting_id = ?').run(meeting.id);
+  const now = new Date().toISOString();
+  for (const taskId of [...new Set(body.task_ids.filter(Boolean))]) {
+    const task = db.prepare('SELECT id FROM tasks WHERE id = ? AND list_id = ?').get(taskId, meeting.list_id);
+    if (task) {
+      db.prepare('INSERT OR IGNORE INTO meeting_tasks (meeting_id, task_id, created_at) VALUES (?,?,?)').run(
+        meeting.id,
+        task.id,
+        now
+      );
+    }
+  }
 }
 
 function replaceMeetingIssues(meeting, body) {
@@ -2030,7 +2056,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.10.0',
+      version: '1.11.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -2757,6 +2783,7 @@ export function createApiRouter() {
       now
     );
     const meeting = accessibleMeeting(id, req.user.id);
+    replaceMeetingTasks(meeting, body);
     replaceMeetingIssues(meeting, body);
     res.status(201).json(loadMeetingDetail(id, req.user.id));
   });
@@ -2792,6 +2819,7 @@ export function createApiRouter() {
       db.prepare(`UPDATE meetings SET ${updates.join(', ')} WHERE id = ?`).run(...values);
     }
     const current = accessibleMeeting(meeting.id, req.user.id);
+    replaceMeetingTasks(current, body);
     replaceMeetingIssues(current, body);
     res.json(loadMeetingDetail(meeting.id, req.user.id));
   });

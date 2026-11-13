@@ -209,27 +209,35 @@ export default function DocPage({ docId }) {
             />
 
             {editing ? (
-              <>
-                <div className="doc-editor-toolbar">
-                  {TOOLBAR.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <button type="button" key={item.label} className="doc-tool-btn" title={item.label} onClick={() => insertSyntax(item)}>
-                        <Icon size={15} />
-                      </button>
-                    );
-                  })}
-                  <span className="doc-toolbar-hint">支持 Markdown</span>
+              <div className="doc-editor-split">
+                <div className="doc-editor-pane">
+                  <div className="doc-editor-toolbar">
+                    {TOOLBAR.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button type="button" key={item.label} className="doc-tool-btn" title={item.label} onClick={() => insertSyntax(item)}>
+                          <Icon size={15} />
+                        </button>
+                      );
+                    })}
+                    <span className="doc-toolbar-hint">Markdown · 输入即预览</span>
+                  </div>
+                  <textarea
+                    ref={textareaRef}
+                    className="doc-editor"
+                    value={content}
+                    onChange={(event) => setContent(event.target.value)}
+                    placeholder="开始写点什么…"
+                    spellCheck={false}
+                  />
                 </div>
-                <textarea
-                  ref={textareaRef}
-                  className="doc-editor"
-                  value={content}
-                  onChange={(event) => setContent(event.target.value)}
-                  placeholder="开始写点什么…"
-                  spellCheck={false}
+                <div
+                  className="doc-live-preview markdown-body"
+                  dangerouslySetInnerHTML={{
+                    __html: rendered || '<p class="doc-empty">输入内容后在这里实时显示。</p>',
+                  }}
                 />
-              </>
+              </div>
             ) : (
               <div
                 className="doc-content markdown-body"
