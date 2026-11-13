@@ -234,6 +234,41 @@ CREATE TABLE IF NOT EXISTS task_dependencies (
   FOREIGN KEY (depends_on_task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS meetings (
+  id TEXT PRIMARY KEY,
+  list_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  meeting_at TEXT,
+  participants TEXT DEFAULT '',
+  goals TEXT DEFAULT '',
+  content TEXT DEFAULT '',
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS meeting_issues (
+  id TEXT PRIMARY KEY,
+  meeting_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  content TEXT NOT NULL,
+  task_id TEXT,
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS meeting_tasks (
+  meeting_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (meeting_id, task_id),
+  FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS automation_rules (
   id TEXT PRIMARY KEY,
   list_id TEXT NOT NULL,
@@ -356,6 +391,11 @@ CREATE INDEX IF NOT EXISTS idx_participants_task ON task_participants(task_id);
 CREATE INDEX IF NOT EXISTS idx_dependencies_task ON task_dependencies(task_id);
 CREATE INDEX IF NOT EXISTS idx_dependencies_dep ON task_dependencies(depends_on_task_id);
 CREATE INDEX IF NOT EXISTS idx_automations_list ON automation_rules(list_id);
+CREATE INDEX IF NOT EXISTS idx_meetings_list ON meetings(list_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_issues_meeting ON meeting_issues(meeting_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_issues_task ON meeting_issues(task_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_tasks_meeting ON meeting_tasks(meeting_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_tasks_task ON meeting_tasks(task_id);
 CREATE INDEX IF NOT EXISTS idx_phases_list ON project_phases(list_id);
 CREATE INDEX IF NOT EXISTS idx_retrospectives_list ON retrospectives(list_id);
 CREATE INDEX IF NOT EXISTS idx_retrospective_tasks ON retrospective_tasks(retrospective_id);

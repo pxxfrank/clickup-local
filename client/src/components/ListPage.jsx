@@ -13,6 +13,7 @@ import {
   MoreHorizontal,
   PenLine,
   Plus,
+  Presentation,
   Settings2,
   Trash2,
   UserPlus,
@@ -42,6 +43,7 @@ import ProjectOverview from './ProjectOverview.jsx';
 import RetrospectiveView from './RetrospectiveView.jsx';
 import WeeklyReportModal from './WeeklyReportModal.jsx';
 import ListSettingsModal from './ListSettingsModal.jsx';
+import MeetingView from './MeetingView.jsx';
 
 const VIEWS = [
   { id: 'overview', label: '概览', icon: LayoutDashboard },
@@ -50,6 +52,7 @@ const VIEWS = [
   { id: 'board', label: '看板', icon: KanbanSquare },
   { id: 'calendar', label: '日历', icon: CalendarDays },
   { id: 'gantt', label: '甘特', icon: GanttChartSquare },
+  { id: 'meetings', label: '会议', icon: Presentation },
   { id: 'retrospective', label: '复盘', icon: ClipboardCheck },
 ];
 
@@ -490,27 +493,29 @@ export default function ListPage({ listId, view, onViewChange }) {
                 );
               })}
             </nav>
-            <div className="view-bar-actions">
-              <ViewToolbar
-                filters={filters}
-                setFilters={setFilters}
-                sort={sort}
-                setSort={setSort}
-                group={group}
-                setGroup={setGroup}
-                statuses={statuses}
-                search={search}
-                setSearch={setSearch}
-              />
-              <button type="button" className="btn btn-ghost btn-sm report-btn" onClick={() => setReportOpen(true)}>
-                <FileText size={15} />
-                周报
-              </button>
-              <button type="button" className="btn btn-primary btn-sm new-task-btn" onClick={() => openCreateTask({ list_id: list.id })}>
-                <Plus size={15} />
-                新建任务
-              </button>
-            </div>
+            {view !== 'meetings' && (
+              <div className="view-bar-actions">
+                <ViewToolbar
+                  filters={filters}
+                  setFilters={setFilters}
+                  sort={sort}
+                  setSort={setSort}
+                  group={group}
+                  setGroup={setGroup}
+                  statuses={statuses}
+                  search={search}
+                  setSearch={setSearch}
+                />
+                <button type="button" className="btn btn-ghost btn-sm report-btn" onClick={() => setReportOpen(true)}>
+                  <FileText size={15} />
+                  周报
+                </button>
+                <button type="button" className="btn btn-primary btn-sm new-task-btn" onClick={() => openCreateTask({ list_id: list.id })}>
+                  <Plus size={15} />
+                  新建任务
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -548,6 +553,14 @@ export default function ListPage({ listId, view, onViewChange }) {
           />
         )}
         {view === 'gantt' && <GanttView tasks={filteredTasks} onOpenTask={openTask} />}
+        {view === 'meetings' && (
+          <MeetingView
+            list={list}
+            tasks={data.tasks}
+            onOpenTask={openTask}
+            onChanged={refresh}
+          />
+        )}
         {view === 'retrospective' && (
           <RetrospectiveView
             listId={list.id}

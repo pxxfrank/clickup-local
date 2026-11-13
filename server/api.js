@@ -411,6 +411,19 @@ function attachTaskMeta(tasks) {
   return tasks;
 }
 
+function normalizeMeetingIds(listId, meetingIds) {
+  const db = getDb();
+  const ids = [...new Set((Array.isArray(meetingIds) ? meetingIds : []).filter(Boolean))];
+  if (!ids.length) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  const valid = db
+    .prepare(`SELECT id FROM meetings WHERE list_id = ? AND id IN (${placeholders})`)
+    .all(listId, ...ids)
+    .map((row) => row.id);
+  if (valid.length !== ids.length) throw new Error('关联会议必须属于当前项目');
+  return ids;
+}
+
 function normalizeDependencies(listId, taskId, dependencyIds) {
   const db = getDb();
   const ids = [...new Set((Array.isArray(dependencyIds) ? dependencyIds : []).filter(Boolean))];
@@ -784,6 +797,19 @@ function loadTaskDetail(taskId, userId) {
        WHERE d.depends_on_task_id = ? ORDER BY u.order_index`
     )
     .all(taskId);
+  const linkedMeetings = db
+    .prepare(
+      `SELECT m.id, m.title, m.meeting_at, l.id AS list_id, l.name AS list_name,
+              MAX(CASE WHEN mt.task_id IS NOT NULL THEN 1 ELSE 0 END) AS explicit
+       FROM meetings m
+       JOIN lists l ON l.id = m.list_id
+       LEFT JOIN meeting_tasks mt ON mt.meeting_id = m.id AND mt.task_id = ?
+       LEFT JOIN meeting_issues mi ON mi.meeting_id = m.id AND mi.task_id = ?
+       WHERE mt.task_id IS NOT NULL OR mi.task_id IS NOT NULL
+       GROUP BY m.id
+       ORDER BY m.meeting_at DESC`
+    )
+    .all(taskId, taskId);
   return {
     ...shaped,
     tags,
@@ -791,6 +817,7 @@ function loadTaskDetail(taskId, userId) {
     participants,
     dependencies,
     dependents,
+    linked_meetings: linkedMeetings,
     list: {
       id: task.list_id,
       name: task.list_name,
@@ -824,6 +851,87 @@ function getWorkspaceOrFirst(userId, workspaceId) {
   if (!memberships.length) return { workspace: null, memberships: [] };
   const selected = workspaceId ? memberships.find((m) => m.id === workspaceId) : memberships[0];
   return { workspace: selected || memberships[0], memberships };
+}
+
+function accessibleMeeting(meetingId, userId) {
+  return getDb()
+    .prepare(
+      `SELECT m.*, l.name AS list_name, l.color AS list_color, l.space_id,
+              sp.name AS space_name, sp.workspace_id
+       FROM meetings m
+       JOIN lists l ON l.id = m.list_id
+       JOIN spaces sp ON sp.id = l.space_id
+       JOIN workspace_members wm ON wm.workspace_id = sp.workspace_id AND wm.user_id = ?
+       WHERE m.id = ?`
+    )
+    .get(userId, meetingId);
+}
+
+function loadMeetingDetail(meetingId, userId) {
+  const meeting = accessibleMeeting(meetingId, userId);
+  if (!meeting) return null;
+  const issues = getDb()
+    .prepare(
+      `SELECT mi.*, t.name AS task_name, t.due_date AS task_due_date,
+              st.name AS task_status_name, st.color AS task_status_color
+       FROM meeting_issues mi
+       LEFT JOIN tasks t ON t.id = mi.task_id
+       LEFT JOIN statuses st ON st.id = t.status_id
+       WHERE mi.meeting_id = ?
+       ORDER BY mi.kind, mi.order_index, mi.created_at`
+    )
+    .all(meetingId);
+  const linkedTasks = getDb()
+    .prepare(
+      `SELECT DISTINCT t.id, t.name, t.status_id, st.name AS status_name, st.color AS status_color
+       FROM (
+         SELECT task_id FROM meeting_tasks WHERE meeting_id = ?
+         UNION
+         SELECT task_id FROM meeting_issues WHERE meeting_id = ? AND task_id IS NOT NULL
+       ) linked
+       JOIN tasks t ON t.id = linked.task_id
+       LEFT JOIN statuses st ON st.id = t.status_id
+       ORDER BY t.order_index`
+    )
+    .all(meetingId, meetingId);
+  return {
+    ...meeting,
+    linked_tasks: linkedTasks,
+    list: {
+      id: meeting.list_id,
+      name: meeting.list_name,
+      color: meeting.list_color,
+      space_id: meeting.space_id,
+      space_name: meeting.space_name,
+      workspace_id: meeting.workspace_id,
+    },
+    discuss_issues: issues.filter((issue) => issue.kind === 'discuss'),
+    followup_issues: issues.filter((issue) => issue.kind === 'followup'),
+  };
+}
+
+function replaceMeetingIssues(meeting, body) {
+  if (!Array.isArray(body.discuss_issues) && !Array.isArray(body.followup_issues)) return;
+  const db = getDb();
+  const now = new Date().toISOString();
+  db.prepare('DELETE FROM meeting_issues WHERE meeting_id = ?').run(meeting.id);
+  const insert = db.prepare(
+    'INSERT INTO meeting_issues (id, meeting_id, kind, content, task_id, order_index, created_at) VALUES (?,?,?,?,?,?,?)'
+  );
+  for (const kind of ['discuss', 'followup']) {
+    const key = kind === 'discuss' ? 'discuss_issues' : 'followup_issues';
+    const list = Array.isArray(body[key]) ? body[key] : [];
+    list.forEach((issue, index) => {
+      const content = String(issue?.content || '').trim();
+      if (!content) return;
+      let taskId = issue?.task_id || null;
+      if (taskId) {
+        const task = db.prepare('SELECT id FROM tasks WHERE id = ? AND list_id = ?').get(taskId, meeting.list_id);
+        if (!task) taskId = null;
+      }
+      insert.run(randomId(), meeting.id, kind, content, taskId, index, now);
+    });
+  }
 }
 
 export function createApiRouter() {
@@ -1465,9 +1573,17 @@ export function createApiRouter() {
     let completedAt = existing.completed_at;
     const messages = [];
     let dependencyIds = null;
+    let meetingIds = null;
     if (Array.isArray(body.dependency_ids)) {
       try {
         dependencyIds = normalizeDependencies(existing.list_id, existing.id, body.dependency_ids);
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
+    }
+    if (Array.isArray(body.meeting_ids)) {
+      try {
+        meetingIds = normalizeMeetingIds(existing.list_id, body.meeting_ids);
       } catch (error) {
         return res.status(400).json({ error: error.message });
       }
@@ -1568,6 +1684,17 @@ export function createApiRouter() {
       }
       dbAny.prepare('UPDATE tasks SET updated_at = ? WHERE id = ?').run(now, existing.id);
       messages.push('更新了任务依赖');
+    }
+    if (meetingIds) {
+      dbAny.prepare('DELETE FROM meeting_tasks WHERE task_id = ?').run(existing.id);
+      const now = new Date().toISOString();
+      for (const meetingId of meetingIds) {
+        dbAny
+          .prepare('INSERT OR IGNORE INTO meeting_tasks (meeting_id, task_id, created_at) VALUES (?,?,?)')
+          .run(meetingId, existing.id, now);
+      }
+      dbAny.prepare('UPDATE tasks SET updated_at = ? WHERE id = ?').run(now, existing.id);
+      messages.push('更新了关联会议');
     }
     if (body.fields && typeof body.fields === 'object') {
       for (const [fieldId, value] of Object.entries(body.fields)) {
@@ -1903,7 +2030,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.9.0',
+      version: '1.10.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -2584,6 +2711,148 @@ export function createApiRouter() {
     if (!tag || !workspaceRole(tag.workspace_id, req.user.id)) return res.status(404).json({ error: '标签不存在' });
     db.prepare('DELETE FROM tags WHERE id = ?').run(tag.id);
     res.json({ ok: true });
+  });
+
+  router.get('/lists/:id/meetings', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const meetings = db
+      .prepare(
+        `SELECT m.*, u.name AS created_by_name,
+                (SELECT COUNT(*) FROM meeting_issues mi WHERE mi.meeting_id = m.id AND mi.kind = 'discuss') AS discuss_count,
+                (SELECT COUNT(*) FROM meeting_issues mi WHERE mi.meeting_id = m.id AND mi.kind = 'followup') AS followup_count,
+                (SELECT COUNT(*) FROM (
+                   SELECT task_id FROM meeting_issues WHERE meeting_id = m.id AND task_id IS NOT NULL
+                   UNION
+                   SELECT task_id FROM meeting_tasks WHERE meeting_id = m.id
+                 )) AS bound_task_count
+         FROM meetings m LEFT JOIN users u ON u.id = m.created_by
+         WHERE m.list_id = ?
+         ORDER BY COALESCE(m.meeting_at, m.created_at) DESC, m.created_at DESC`
+      )
+      .all(list.id);
+    res.json({ meetings });
+  });
+
+  router.post('/lists/:id/meetings', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const body = req.body || {};
+    const id = randomId();
+    const now = new Date().toISOString();
+    const title = String(body.title || '').trim() || '未命名会议';
+    db.prepare(
+      `INSERT INTO meetings (id, list_id, title, meeting_at, participants, goals, content, created_by, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`
+    ).run(
+      id,
+      list.id,
+      title,
+      body.meeting_at || null,
+      String(body.participants || ''),
+      String(body.goals || ''),
+      String(body.content || ''),
+      req.user.id,
+      now,
+      now
+    );
+    const meeting = accessibleMeeting(id, req.user.id);
+    replaceMeetingIssues(meeting, body);
+    res.status(201).json(loadMeetingDetail(id, req.user.id));
+  });
+
+  router.get('/meetings/:id', (req, res) => {
+    const meeting = loadMeetingDetail(req.params.id, req.user.id);
+    if (!meeting) return res.status(404).json({ error: '会议不存在' });
+    res.json(meeting);
+  });
+
+  router.patch('/meetings/:id', (req, res) => {
+    const meeting = accessibleMeeting(req.params.id, req.user.id);
+    if (!meeting) return res.status(404).json({ error: '会议不存在' });
+    const body = req.body || {};
+    const updates = [];
+    const values = [];
+    if (body.title !== undefined) {
+      const title = String(body.title || '').trim();
+      if (!title) return res.status(400).json({ error: '会议标题不能为空' });
+      updates.push('title = ?');
+      values.push(title);
+    }
+    for (const field of ['meeting_at', 'participants', 'goals', 'content']) {
+      if (body[field] !== undefined) {
+        updates.push(`${field} = ?`);
+        values.push(field === 'meeting_at' ? body[field] || null : String(body[field] || ''));
+      }
+    }
+    if (updates.length) {
+      updates.push('updated_at = ?');
+      values.push(new Date().toISOString());
+      values.push(meeting.id);
+      db.prepare(`UPDATE meetings SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    }
+    const current = accessibleMeeting(meeting.id, req.user.id);
+    replaceMeetingIssues(current, body);
+    res.json(loadMeetingDetail(meeting.id, req.user.id));
+  });
+
+  router.delete('/meetings/:id', (req, res) => {
+    const meeting = accessibleMeeting(req.params.id, req.user.id);
+    if (!meeting) return res.status(404).json({ error: '会议不存在' });
+    db.prepare('DELETE FROM meetings WHERE id = ?').run(meeting.id);
+    res.json({ ok: true });
+  });
+
+  router.post('/meeting-issues/:id/create-task', (req, res) => {
+    const issue = db
+      .prepare(
+        `SELECT mi.*, m.title AS meeting_title, m.meeting_at, m.list_id, sp.workspace_id
+         FROM meeting_issues mi JOIN meetings m ON m.id = mi.meeting_id
+         JOIN lists l ON l.id = m.list_id
+         JOIN spaces sp ON sp.id = l.space_id
+         JOIN workspace_members wm ON wm.workspace_id = sp.workspace_id AND wm.user_id = ?
+         WHERE mi.id = ?`
+      )
+      .get(req.user.id, req.params.id);
+    if (!issue) return res.status(404).json({ error: '会议议题不存在' });
+    if (issue.task_id) {
+      const existing = db.prepare('SELECT id FROM tasks WHERE id = ?').get(issue.task_id);
+      if (existing) {
+        return res.json({ task: loadTaskDetail(existing.id, req.user.id), meeting: loadMeetingDetail(issue.meeting_id, req.user.id) });
+      }
+    }
+    const firstOpen =
+      db.prepare("SELECT id FROM statuses WHERE list_id = ? AND type = 'open' ORDER BY order_index LIMIT 1").get(issue.list_id) ||
+      db.prepare('SELECT id FROM statuses WHERE list_id = ? ORDER BY order_index LIMIT 1').get(issue.list_id);
+    if (!firstOpen) return res.status(400).json({ error: '当前项目没有可用状态' });
+    const now = new Date().toISOString();
+    const id = randomId();
+    const maxOrder = db.prepare('SELECT COALESCE(MAX(order_index), 0) AS max FROM tasks WHERE list_id = ?').get(issue.list_id).max;
+    db.prepare(
+      `INSERT INTO tasks (id, list_id, parent_id, name, description, status_id, priority, created_by, order_index, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(
+      id,
+      issue.list_id,
+      null,
+      issue.content.slice(0, 240),
+      `来自会议「${issue.meeting_title}」的议题。\n\n${issue.content}`,
+      firstOpen.id,
+      0,
+      req.user.id,
+      maxOrder + 100,
+      now,
+      now
+    );
+    db.prepare('UPDATE meeting_issues SET task_id = ? WHERE id = ?').run(id, issue.id);
+    runAutomations(
+      { id: issue.list_id, workspace_id: issue.workspace_id },
+      id,
+      'task_created',
+      { actorId: req.user.id }
+    );
+    logActivity(issue.workspace_id, id, req.user.id, 'task_created', `从会议「${issue.meeting_title}」创建了任务`);
+    res.status(201).json({ task: loadTaskDetail(id, req.user.id), meeting: loadMeetingDetail(issue.meeting_id, req.user.id) });
   });
 
   router.get('/lists/:id/brainstorm', (req, res) => {

@@ -81,6 +81,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   const [addingContact, setAddingContact] = useState(false);
   const [dependencyTasks, setDependencyTasks] = useState([]);
   const [dependencyGraphOpen, setDependencyGraphOpen] = useState(false);
+  const [meetingOptions, setMeetingOptions] = useState([]);
   const fileInputRef = useRef(null);
   const titleRef = useRef(null);
   const commentsEndRef = useRef(null);
@@ -91,6 +92,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   useEffect(() => {
     if (!detail?.list?.id) {
       setDependencyTasks([]);
+      setMeetingOptions([]);
       return undefined;
     }
     let cancelled = false;
@@ -101,6 +103,14 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
       })
       .catch(() => {
         if (!cancelled) setDependencyTasks([]);
+      });
+    api
+      .get(`/lists/${detail.list.id}/meetings`)
+      .then((data) => {
+        if (!cancelled) setMeetingOptions(data.meetings || []);
+      })
+      .catch(() => {
+        if (!cancelled) setMeetingOptions([]);
       });
     return () => {
       cancelled = true;
@@ -451,6 +461,16 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
     if (current.has(personId)) current.delete(personId);
     else current.add(personId);
     await patchTask({ participant_ids: [...current] });
+  }
+
+  async function toggleMeeting(meetingId) {
+    if (!detail) return null;
+    const explicit = new Set(
+      (detail.linked_meetings || []).filter((meeting) => meeting.explicit).map((meeting) => meeting.id)
+    );
+    if (explicit.has(meetingId)) explicit.delete(meetingId);
+    else explicit.add(meetingId);
+    return patchTask({ meeting_ids: [...explicit] });
   }
 
   async function toggleDependency(dependencyId) {
@@ -941,6 +961,65 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                         </button>
                       </div>
                       <DependencyGraphCanvas task={detail} tasks={dependencyTasks} compact />
+                    </section>
+
+                    <section className="drawer-section">
+                      <div className="drawer-section-head">
+                        <h3>关联会议 <span className="section-count">{detail.linked_meetings?.length || 0}</span></h3>
+                        <Popover
+                          width={300}
+                          trigger={
+                            <button type="button" className="section-action">
+                              <CalendarDays size={13} /> 绑定会议
+                            </button>
+                          }
+                        >
+                          <div className="menu-label">绑定当前项目中的会议</div>
+                          {meetingOptions.map((meeting) => {
+                            const explicit = (detail.linked_meetings || []).some(
+                              (item) => item.id === meeting.id && item.explicit
+                            );
+                            return (
+                              <MenuItem
+                                key={meeting.id}
+                                active={explicit}
+                                icon={<CalendarDays size={14} />}
+                                onClick={() => toggleMeeting(meeting.id)}
+                              >
+                                <span className="dependency-option">
+                                  {meeting.title}
+                                  {meeting.meeting_at ? <em>{formatDateTime(meeting.meeting_at)}</em> : null}
+                                </span>
+                              </MenuItem>
+                            );
+                          })}
+                          {!meetingOptions.length && <p className="participant-hint">当前项目还没有会议记录。</p>}
+                          <p className="participant-hint">可在「会议」视图创建会议；勾选后任务与会议双向关联。</p>
+                        </Popover>
+                      </div>
+                      {detail.linked_meetings?.length > 0 ? (
+                        <div className="drawer-linked-meetings">
+                          {detail.linked_meetings.map((meeting) => (
+                            <div className="linked-meeting-row" key={meeting.id}>
+                              <CalendarDays size={14} />
+                              <span>{meeting.title}</span>
+                              <em>{meeting.explicit ? '已绑定' : '来自议题'}</em>
+                              {meeting.explicit && (
+                                <button
+                                  type="button"
+                                  className="icon-btn"
+                                  title="解除关联"
+                                  onClick={() => toggleMeeting(meeting.id)}
+                                >
+                                  <X size={12} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="dependency-graph-note">还没有关联会议。可以把任务绑定到会议，会议议题也会自动显示在这里。</p>
+                      )}
                     </section>
 
                     {detail.fields?.length > 0 && (
