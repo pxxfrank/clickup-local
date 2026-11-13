@@ -2157,6 +2157,16 @@
   padding-right: 4px;
 }
 
+.doc-markdown-editor {
+  border-radius: 10px;
+}
+
+.doc-markdown-editor .markdown-wysiwyg {
+  min-height: 440px;
+  padding: 18px 20px;
+  font-size: 14px;
+}
+
 .doc-editor-split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
