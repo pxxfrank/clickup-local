@@ -584,7 +584,7 @@ export default function Sidebar({ open, onClose }) {
               <Settings size={16} />
             </IconButton>
           </div>
-          <div className="sidebar-version">ClickUp Local v1.15.0 · 数据保存在本机</div>
+          <div className="sidebar-version">ClickUp Local v1.16.0 · 数据保存在本机</div>
         </div>
       </aside>
 

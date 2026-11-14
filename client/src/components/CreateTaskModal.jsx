@@ -16,6 +16,7 @@ export default function CreateTaskModal({ defaults, onClose }) {
   const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState('0');
   const [statuses, setStatuses] = useState([]);
+  const [contacts, setContacts] = useState([]);
   const [busy, setBusy] = useState(false);
   const [showMore, setShowMore] = useState(false);
 
@@ -35,6 +36,7 @@ export default function CreateTaskModal({ defaults, onClose }) {
     setAssigneeId(defaults?.assignee_id || '');
     setShowMore(Boolean(defaults?.due_date));
     setStatuses([]);
+    setContacts([]);
   }, [open, defaults, lists]);
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export default function CreateTaskModal({ defaults, onClose }) {
       .then((data) => {
         if (cancelled) return;
         setStatuses(data.statuses || []);
+        setContacts(data.contacts || []);
         setStatusId((current) => {
           if (current && data.statuses?.some((status) => status.id === current)) return current;
           if (defaults?.status_id && data.statuses?.some((status) => status.id === defaults.status_id)) return defaults.status_id;
@@ -61,6 +64,13 @@ export default function CreateTaskModal({ defaults, onClose }) {
 
   const selectedList = lists.find((entry) => entry.list.id === listId);
   const selectedStatus = statuses.find((status) => status.id === statusId);
+  const assigneeOptions = useMemo(() => {
+    const result = [...members];
+    for (const contact of contacts) {
+      if (!result.some((person) => person.id === contact.id)) result.push(contact);
+    }
+    return result;
+  }, [members, contacts]);
 
   async function submit(event) {
     event?.preventDefault();
@@ -146,10 +156,10 @@ export default function CreateTaskModal({ defaults, onClose }) {
                 <ChevronDown size={13} />
               </label>
               <label className="create-prop">
-                <span>{assigneeId ? <Avatar user={members.find((member) => member.id === assigneeId)} size={15} /> : <UserRound size={14} />} 负责人</span>
+                <span>{assigneeId ? <Avatar user={assigneeOptions.find((member) => member.id === assigneeId)} size={15} /> : <UserRound size={14} />} 负责人</span>
                 <select value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)}>
                   <option value="">未指派</option>
-                  {members.map((member) => (
+                  {assigneeOptions.map((member) => (
                     <option key={member.id} value={member.id}>{member.name}{member.is_external ? '（外部）' : ''}</option>
                   ))}
                 </select>

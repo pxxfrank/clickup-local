@@ -85,18 +85,29 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   const [dependencyGraphOpen, setDependencyGraphOpen] = useState(false);
   const [meetingOptions, setMeetingOptions] = useState([]);
   const [spacePeople, setSpacePeople] = useState([]);
+  const [listContacts, setListContacts] = useState([]);
   const fileInputRef = useRef(null);
   const titleRef = useRef(null);
   const commentsEndRef = useRef(null);
   const commentsListRef = useRef(null);
 
   const assignablePeople = bootstrap?.assignees || bootstrap?.members || [];
+  const mergePeople = (primary, extra) => {
+    const result = [...primary];
+    for (const person of extra) {
+      if (!result.some((item) => item.id === person.id)) result.push(person);
+    }
+    return result;
+  };
+  const assigneeOptions = mergePeople(assignablePeople, listContacts);
+  const participantOptions = mergePeople(spacePeople.length ? spacePeople : assignablePeople, listContacts);
   const workspaceTags = bootstrap?.tags || [];
   useEffect(() => {
     if (!detail?.list?.id) {
       setDependencyTasks([]);
       setMeetingOptions([]);
       setSpacePeople([]);
+      setListContacts([]);
       return undefined;
     }
     let cancelled = false;
@@ -123,6 +134,14 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
       })
       .catch(() => {
         if (!cancelled) setSpacePeople([]);
+      });
+    api
+      .get(`/lists/${detail.list.id}/contacts`)
+      .then((data) => {
+        if (!cancelled) setListContacts(data.contacts || []);
+      })
+      .catch(() => {
+        if (!cancelled) setListContacts([]);
       });
     return () => {
       cancelled = true;
@@ -665,7 +684,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                           >
                             未指派
                           </MenuItem>
-                          {assignablePeople.map((member) => (
+                          {assigneeOptions.map((member) => (
                             <MenuItem
                               key={member.id}
                               active={member.id === detail.assignee_id}
@@ -715,13 +734,13 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                           ) : (
                             <UsersRound size={15} />
                           )}
-                          {detail.participants?.length ? `${detail.participants.length} 位相关人` : '相关人'}
+                          {detail.participants?.length ? `${detail.participants.length} 位参与人` : '参与人'}
                           <ChevronDown size={13} />
                         </button>
                       }
                     >
-                      <div className="menu-label">任务相关人（可多选）</div>
-                      {(spacePeople.length ? spacePeople : assignablePeople).map((person) => {
+                      <div className="menu-label">参与人（可多选）</div>
+                      {participantOptions.map((person) => {
                         const active = detail.participants?.some((participant) => participant.id === person.id);
                         return (
                           <MenuItem
@@ -740,13 +759,11 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                       {detail.participants?.length > 0 && (
                         <>
                           <MenuDivider />
-                          <MenuItem onClick={() => patchTask({ participant_ids: [] })}>清除相关人</MenuItem>
+                          <MenuItem onClick={() => patchTask({ participant_ids: [] })}>清除参与人</MenuItem>
                         </>
                       )}
                       <p className="participant-hint">
-                        {spacePeople.length
-                          ? '相关人来自空间「相关人」列表；可在空间菜单中选择“相关人管理”维护。'
-                          : '相关人来自空间成员与外部责任人；可在空间菜单中选择“相关人管理”维护。'}
+                        参与人来自空间人员列表；可在空间菜单中统一维护。
                       </p>
                     </Popover>
 

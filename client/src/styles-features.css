@@ -691,6 +691,104 @@
   color: var(--muted);
 }
 
+/* ================= List external contacts ================= */
+
+.contact-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--brand-line);
+  border-radius: 8px;
+  background: #fdfcff;
+}
+
+.contact-settings-form-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.contact-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contact-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.contact-settings-avatar {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.contact-settings-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.contact-settings-main strong {
+  color: var(--ink-2);
+  font-size: 10.5px;
+}
+
+.contact-settings-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-2);
+  font-size: 8.5px;
+}
+
+.contact-settings-badge {
+  flex: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: #fff4e5;
+  color: #b77720;
+  font-size: 7.5px;
+}
+
+.contact-settings-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 25px 15px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted-2);
+  text-align: center;
+  font-size: 9px;
+}
+
+.contact-settings-empty p {
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* ================= Space people ================= */
 
 .space-people-modal {

@@ -338,6 +338,16 @@ function snapshotRetrospectiveTasks(db, listId, retrospectiveId, now) {
   return count;
 }
 
+function isListAssignable(listId, userId) {
+  const db = getDb();
+  const list = db
+    .prepare('SELECT l.id, s.workspace_id FROM lists l JOIN spaces s ON s.id = l.space_id WHERE l.id = ?')
+    .get(listId);
+  if (!list) return false;
+  if (isAssignable(list.workspace_id, userId)) return true;
+  return Boolean(db.prepare('SELECT 1 FROM list_contacts WHERE list_id = ? AND user_id = ?').get(listId, userId));
+}
+
 function accessibleSpace(spaceId, userId) {
   return getDb()
     .prepare(
@@ -518,7 +528,7 @@ function normalizeAutomationInput(list, body) {
     actionConfig.status_id = statusId;
   } else if (actionType === 'set_assignee') {
     const assigneeId = body?.action_config?.assignee_id ? String(body.action_config.assignee_id) : null;
-    if (assigneeId && !isAssignable(list.workspace_id, assigneeId)) throw new Error('负责人不可用');
+    if (assigneeId && !isListAssignable(list.id, assigneeId)) throw new Error('负责人不可用');
     actionConfig.assignee_id = assigneeId;
   } else if (actionType === 'set_priority') {
     actionConfig.priority = Math.max(0, Math.min(4, Number(body?.action_config?.priority) || 0));
@@ -575,7 +585,7 @@ function runAutomations(list, taskId, trigger, { fromStatusId, toStatusId, actor
       description = `将状态改为「${status.name}」`;
     } else if (rule.action_type === 'set_assignee') {
       const assigneeId = rule.action_config.assignee_id || null;
-      if (assigneeId && !isAssignable(list.workspace_id, assigneeId)) continue;
+      if (assigneeId && !isListAssignable(list.id, assigneeId)) continue;
       db.prepare('UPDATE tasks SET assignee_id = ?, updated_at = ? WHERE id = ?').run(
         assigneeId,
         new Date().toISOString(),
@@ -784,6 +794,9 @@ function loadTaskDetail(taskId, userId) {
       .all(task.workspace_id)
       .map((row) => row.user_id)
   );
+  for (const row of db.prepare('SELECT user_id FROM list_contacts WHERE list_id = ?').all(task.list_id)) {
+    contactIds.add(row.user_id);
+  }
   const participants = db
     .prepare(
       `SELECT u.id, u.name, u.color, u.title, tp.created_at FROM task_participants tp
@@ -1486,6 +1499,105 @@ export function createApiRouter() {
     res.json({ workspace, projects, totals });
   });
 
+  router.get('/lists/:id/contacts', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const contacts = db
+      .prepare(
+        `SELECT u.id, u.name, u.email, u.color, u.title, lc.created_at
+         FROM list_contacts lc JOIN users u ON u.id = lc.user_id
+         WHERE lc.list_id = ? ORDER BY u.name`
+      )
+      .all(list.id)
+      .map((contact) => ({ ...contact, is_external: true }));
+    res.json({ contacts });
+  });
+
+  router.post('/lists/:id/contacts', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: '责任人姓名不能为空' });
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return res.status(400).json({ error: '邮箱格式不正确' });
+    }
+    let user = email ? db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(email) : null;
+    if (!user) {
+      const member = db
+        .prepare(
+          `SELECT u.* FROM workspace_members m JOIN users u ON u.id = m.user_id
+           WHERE m.workspace_id = ? AND lower(u.name) = lower(?) LIMIT 1`
+        )
+        .get(list.workspace_id, name);
+      if (member) return res.status(400).json({ error: '该人员是团队成员，不需要添加为外部责任人' });
+    }
+    if (!user) {
+      user = db
+        .prepare(
+          `SELECT u.* FROM list_contacts lc JOIN users u ON u.id = lc.user_id
+           JOIN lists l ON l.id = lc.list_id JOIN spaces s ON s.id = l.space_id
+           WHERE s.workspace_id = ? AND lower(u.name) = lower(?) LIMIT 1`
+        )
+        .get(list.workspace_id, name);
+    }
+    if (!user) {
+      const id = randomId();
+      const placeholderEmail = email || `external-${id.slice(0, 8)}@clickup.local`;
+      const { hash, salt } = hashPassword(randomId());
+      const colors = ['#7B68EE', '#4A9EFF', '#26C6DA', '#2EA44F', '#F59E0B', '#FF8A65', '#E5484D', '#A25DDC'];
+      db.prepare(
+        'INSERT INTO users (id, name, email, password_hash, password_salt, color, title, created_at) VALUES (?,?,?,?,?,?,?,?)'
+      ).run(
+        id,
+        name,
+        placeholderEmail,
+        hash,
+        salt,
+        req.body?.color || colors[Math.floor(Math.random() * colors.length)],
+        '外部责任人',
+        new Date().toISOString()
+      );
+      user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    }
+    if (workspaceRole(list.workspace_id, user.id)) {
+      return res.status(400).json({ error: '该人员是团队成员，不需要添加为外部责任人' });
+    }
+    db.prepare('INSERT OR IGNORE INTO list_contacts (list_id, user_id, created_at) VALUES (?,?,?)').run(
+      list.id,
+      user.id,
+      new Date().toISOString()
+    );
+    res.status(201).json({ ...publicUser(user), is_external: true });
+  });
+
+  router.patch('/lists/:id/contacts/:userId', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const contact = db.prepare('SELECT * FROM list_contacts WHERE list_id = ? AND user_id = ?').get(list.id, req.params.userId);
+    if (!contact) return res.status(404).json({ error: '外部责任人不存在' });
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.userId);
+    const name = req.body?.name !== undefined ? String(req.body.name).trim() : user.name;
+    if (!name) return res.status(400).json({ error: '责任人姓名不能为空' });
+    const email = req.body?.email !== undefined ? String(req.body.email).trim().toLowerCase() : user.email;
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: '邮箱格式不正确' });
+    const emailOwner = email ? db.prepare('SELECT id FROM users WHERE lower(email) = ? AND id != ?').get(email, user.id) : null;
+    if (emailOwner) return res.status(400).json({ error: '该邮箱已被其他人员使用' });
+    db.prepare('UPDATE users SET name = ?, email = ? WHERE id = ?').run(name, email || user.email, user.id);
+    res.json({ ...publicUser({ ...user, name, email: email || user.email }), is_external: true });
+  });
+
+  router.delete('/lists/:id/contacts/:userId', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    db.prepare('DELETE FROM list_contacts WHERE list_id = ? AND user_id = ?').run(list.id, req.params.userId);
+    db.prepare('UPDATE tasks SET assignee_id = NULL WHERE list_id = ? AND assignee_id = ?').run(list.id, req.params.userId);
+    db.prepare(
+      'DELETE FROM task_participants WHERE user_id = ? AND task_id IN (SELECT id FROM tasks WHERE list_id = ?)'
+    ).run(req.params.userId, list.id);
+    res.json({ ok: true });
+  });
+
   router.get('/lists/:id', (req, res) => {
     const list = accessibleList(req.params.id, req.user.id);
     if (!list) return res.status(404).json({ error: '列表不存在' });
@@ -1513,6 +1625,14 @@ export function createApiRouter() {
     const retrospectiveCount = db
       .prepare('SELECT COUNT(*) AS c FROM retrospectives WHERE list_id = ?')
       .get(list.id).c;
+    const contacts = db
+      .prepare(
+        `SELECT u.id, u.name, u.email, u.color, u.title, lc.created_at
+         FROM list_contacts lc JOIN users u ON u.id = lc.user_id
+         WHERE lc.list_id = ? ORDER BY u.name`
+      )
+      .all(list.id)
+      .map((contact) => ({ ...contact, is_external: true }));
     res.json({
       list,
       statuses,
@@ -1520,6 +1640,7 @@ export function createApiRouter() {
       tasks,
       milestones,
       phases,
+      contacts,
       brainstorm_count: brainstormCount,
       retrospective_count: retrospectiveCount,
     });
@@ -1544,7 +1665,7 @@ export function createApiRouter() {
     if (!statusId) return res.status(400).json({ error: '列表缺少工作流状态' });
     const status = statusRows.find((s) => s.id === statusId);
     let assigneeId = body.assignee_id || null;
-    if (assigneeId && !isAssignable(list.workspace_id, assigneeId)) assigneeId = null;
+    if (assigneeId && !isListAssignable(list.id, assigneeId)) assigneeId = null;
     const maxOrder = db.prepare('SELECT COALESCE(MAX(order_index), 0) AS max FROM tasks WHERE list_id = ?').get(list.id).max;
     const id = randomId();
     const now = new Date().toISOString();
@@ -1578,7 +1699,7 @@ export function createApiRouter() {
     }
     const participantIds = Array.isArray(body.participant_ids) ? body.participant_ids : [];
     for (const participantId of participantIds) {
-      if (isAssignable(list.workspace_id, participantId)) {
+      if (isListAssignable(list.id, participantId)) {
         db.prepare('INSERT OR IGNORE INTO task_participants (task_id, user_id, created_at) VALUES (?,?,?)').run(
           id,
           participantId,
@@ -1653,8 +1774,8 @@ export function createApiRouter() {
     }
     if (body.assignee_id !== undefined) {
       let assigneeId = body.assignee_id || null;
-      if (assigneeId && !isAssignable(existing.workspace_id, assigneeId)) {
-        return res.status(400).json({ error: '该责任人不在当前工作空间的可指派名单中' });
+      if (assigneeId && !isListAssignable(existing.list_id, assigneeId)) {
+        return res.status(400).json({ error: '该责任人不在当前列表的可指派名单中' });
       }
       updates.push('assignee_id = ?');
       values.push(assigneeId);
@@ -1710,7 +1831,7 @@ export function createApiRouter() {
       dbAny.prepare('DELETE FROM task_participants WHERE task_id = ?').run(existing.id);
       const now = new Date().toISOString();
       for (const participantId of body.participant_ids) {
-        if (!isAssignable(existing.workspace_id, participantId)) continue;
+        if (!isListAssignable(existing.list_id, participantId)) continue;
         dbAny
           .prepare('INSERT OR IGNORE INTO task_participants (task_id, user_id, created_at) VALUES (?,?,?)')
           .run(existing.id, participantId, now);
@@ -2072,7 +2193,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.15.0',
+      version: '1.16.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -3450,7 +3571,7 @@ export function createApiRouter() {
           if (tagId) db.prepare('INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?,?)').run(taskId, tagId);
         }
         for (const participantId of Array.isArray(task.participant_ids) ? task.participant_ids : []) {
-          if (isAssignable(template.workspace_id, participantId)) {
+          if (isListAssignable(listId, participantId)) {
             db.prepare('INSERT OR IGNORE INTO task_participants (task_id, user_id, created_at) VALUES (?,?,?)').run(
               taskId,
               participantId,

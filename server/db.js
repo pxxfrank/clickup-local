@@ -98,6 +98,15 @@ CREATE TABLE IF NOT EXISTS lists (
   FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS list_contacts (
+  list_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (list_id, user_id),
+  FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS statuses (
   id TEXT PRIMARY KEY,
   list_id TEXT NOT NULL,
@@ -391,6 +400,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_tasks_list ON tasks(list_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
+CREATE INDEX IF NOT EXISTS idx_list_contacts_list ON list_contacts(list_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status_id);
 CREATE INDEX IF NOT EXISTS idx_activity_workspace ON activity(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);

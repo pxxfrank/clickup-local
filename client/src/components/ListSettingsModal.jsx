@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, Zap } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, Users, Zap } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { PROJECT_COLORS, colorInfo } from '../lib/colors.js';
@@ -34,6 +34,10 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
   const [automationDraft, setAutomationDraft] = useState(null);
   const [automationBusy, setAutomationBusy] = useState(false);
   const [deleteAutomationTarget, setDeleteAutomationTarget] = useState(null);
+  const [contacts, setContacts] = useState([]);
+  const [contactDraft, setContactDraft] = useState(null);
+  const [contactBusy, setContactBusy] = useState(false);
+  const [contactDeleteTarget, setContactDeleteTarget] = useState(null);
 
   useEffect(() => {
     if (open && list) {
@@ -54,6 +58,10 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
         .get(`/lists/${list.id}/automations`)
         .then((data) => setAutomations(data.automations || []))
         .catch(() => setAutomations([]));
+      api
+        .get(`/lists/${list.id}/contacts`)
+        .then((data) => setContacts(data.contacts || []))
+        .catch(() => setContacts([]));
     }
   }, [open, list?.id]);
 
@@ -270,6 +278,52 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
     await onChanged();
   }
 
+  function newContactDraft() {
+    setContactDraft({ id: null, name: '', email: '' });
+  }
+
+  function editContact(contact) {
+    setContactDraft({ id: contact.id, name: contact.name, email: contact.email || '' });
+  }
+
+  async function reloadContacts() {
+    const data = await api.get(`/lists/${list.id}/contacts`);
+    setContacts(data.contacts || []);
+  }
+
+  async function saveContact(event) {
+    event.preventDefault();
+    if (!contactDraft?.name?.trim()) return;
+    setContactBusy(true);
+    try {
+      const payload = { name: contactDraft.name.trim(), email: contactDraft.email.trim() };
+      if (contactDraft.id) await api.patch(`/lists/${list.id}/contacts/${contactDraft.id}`, payload);
+      else await api.post(`/lists/${list.id}/contacts`, payload);
+      setContactDraft(null);
+      await reloadContacts();
+      toast(contactDraft.id ? '外部责任人已更新' : '外部责任人已添加');
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setContactBusy(false);
+    }
+  }
+
+  async function removeContact() {
+    if (!contactDeleteTarget) return;
+    setContactBusy(true);
+    try {
+      await api.delete(`/lists/${list.id}/contacts/${contactDeleteTarget.id}`);
+      setContactDeleteTarget(null);
+      await reloadContacts();
+      toast('外部责任人已删除');
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setContactBusy(false);
+    }
+  }
+
   async function saveGeneral(event) {
     event.preventDefault();
     setBusy(true);
@@ -292,6 +346,9 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
         <div className="settings-tabs">
           <button type="button" className={tab === 'status' ? 'is-active' : ''} onClick={() => setTab('status')}>工作流状态</button>
           <button type="button" className={tab === 'fields' ? 'is-active' : ''} onClick={() => setTab('fields')}>自定义字段</button>
+          <button type="button" className={tab === 'contacts' ? 'is-active' : ''} onClick={() => setTab('contacts')}>
+            外部责任人 <span className="settings-tab-count">{contacts.length}</span>
+          </button>
           <button type="button" className={tab === 'automations' ? 'is-active' : ''} onClick={() => setTab('automations')}>
             自动化 <span className="settings-tab-count">{automations.length}</span>
           </button>
@@ -468,6 +525,74 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
                 <Plus size={15} /> 添加字段
               </button>
             )}
+          </div>
+        )}
+
+        {tab === 'contacts' && (
+          <div className="settings-pane">
+            <div className="automation-head">
+              <p className="settings-hint">为这个列表维护独立的外部责任人，可在任务负责人和参与人中选择。删除时会解除该列表中相关任务的指派。</p>
+              <button type="button" className="btn btn-primary btn-sm" onClick={newContactDraft}>
+                <Plus size={14} /> 添加外部责任人
+              </button>
+            </div>
+            {contactDraft && (
+              <form className="contact-settings-form" onSubmit={saveContact}>
+                <div className="form-grid-2">
+                  <label className="field">
+                    <span className="field-label">姓名</span>
+                    <input
+                      className="input"
+                      autoFocus
+                      value={contactDraft.name}
+                      onChange={(event) => setContactDraft({ ...contactDraft, name: event.target.value })}
+                      placeholder="例如：王工"
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">邮箱（可选）</span>
+                    <input
+                      className="input"
+                      type="email"
+                      value={contactDraft.email}
+                      onChange={(event) => setContactDraft({ ...contactDraft, email: event.target.value })}
+                      placeholder="用于识别同一个人"
+                    />
+                  </label>
+                </div>
+                <div className="contact-settings-form-foot">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setContactDraft(null)}>取消</button>
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={contactBusy || !contactDraft.name.trim()}>
+                    {contactBusy ? <Spinner size={13} /> : null} 保存
+                  </button>
+                </div>
+              </form>
+            )}
+            <div className="contact-settings-list">
+              {contacts.map((contact) => (
+                <div className="contact-settings-row" key={contact.id}>
+                  <span className="contact-settings-avatar" style={{ background: contact.color }}>{contact.name.slice(-1)}</span>
+                  <div className="contact-settings-main">
+                    <strong>{contact.name}</strong>
+                    <span>{contact.email || '未填写邮箱'}</span>
+                  </div>
+                  <span className="contact-settings-badge">外部</span>
+                  <button type="button" className="icon-btn" onClick={() => editContact(contact)} title="编辑外部责任人">
+                    <Pencil size={13} />
+                  </button>
+                  <button type="button" className="icon-btn icon-btn-danger" onClick={() => setContactDeleteTarget(contact)} title="删除外部责任人">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+              {!contacts.length && !contactDraft && (
+                <div className="contact-settings-empty">
+                  <Users size={21} />
+                  <p>还没有外部责任人。</p>
+                  <span>把客户、供应商或外部合作方加入这里，任务中即可直接选择。</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -738,6 +863,15 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
         busy={busy}
         onClose={() => setDeleteTarget(null)}
         onConfirm={removeTarget}
+      />
+
+      <ConfirmDialog
+        open={Boolean(contactDeleteTarget)}
+        title="删除外部责任人"
+        message={`确定删除「${contactDeleteTarget?.name || ''}」吗？该列表中由该人员负责的任务会取消指派，参与关系也会移除。`}
+        busy={contactBusy}
+        onClose={() => setContactDeleteTarget(null)}
+        onConfirm={removeContact}
       />
 
       <ConfirmDialog
