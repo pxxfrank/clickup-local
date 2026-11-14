@@ -17,6 +17,7 @@ import {
   Sparkles,
   Trash2,
   UserPlus,
+  Users,
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
@@ -35,6 +36,7 @@ import {
   Popover,
   Spinner,
 } from './ui.jsx';
+import SpacePeopleModal from './SpacePeopleModal.jsx';
 
 const ICONS = ['🚀', '📣', '🏡', '💼', '🎯', '🧠', '📦', '🌱', '⚡️', '🛠️'];
 const LIST_ICONS = ['📋', '🏃', '🐞', '📄', '💻', '🎨', '🔬', '✍️', '🎪', '📈', '🤝', '👋', '📌', '🧪'];
@@ -47,6 +49,7 @@ export default function Sidebar({ open, onClose }) {
   const [itemModal, setItemModal] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [workspaceModal, setWorkspaceModal] = useState(false);
+  const [spacePeopleTarget, setSpacePeopleTarget] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const spaces = bootstrap?.spaces || [];
@@ -412,6 +415,9 @@ export default function Sidebar({ open, onClose }) {
                             从模板创建项目
                           </MenuItem>
                           <MenuDivider />
+                          <MenuItem icon={<Users size={15} />} onClick={() => { close(); setSpacePeopleTarget(space); }}>
+                            相关人管理
+                          </MenuItem>
                           <MenuItem icon={<Pencil size={15} />} onClick={() => { close(); openRename(space, 'space'); }}>
                             编辑空间
                           </MenuItem>
@@ -578,7 +584,7 @@ export default function Sidebar({ open, onClose }) {
               <Settings size={16} />
             </IconButton>
           </div>
-          <div className="sidebar-version">ClickUp Local v1.14.0 · 数据保存在本机</div>
+          <div className="sidebar-version">ClickUp Local v1.15.0 · 数据保存在本机</div>
         </div>
       </aside>
 
@@ -740,6 +746,12 @@ export default function Sidebar({ open, onClose }) {
         busy={busy}
         onClose={() => setDeleteTarget(null)}
         onConfirm={removeItem}
+      />
+
+      <SpacePeopleModal
+        open={Boolean(spacePeopleTarget)}
+        space={spacePeopleTarget}
+        onClose={() => setSpacePeopleTarget(null)}
       />
 
       <Modal

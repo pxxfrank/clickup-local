@@ -580,9 +580,9 @@ export default function ListPage({ listId, view, onViewChange }) {
             listId={list.id}
             listName={list.name}
             statuses={statuses}
-            onCommitted={async () => {
+            onCommitted={async (remaining = 0) => {
               await refresh();
-              onViewChange('list');
+              if (!remaining) onViewChange('list');
             }}
           />
         )}

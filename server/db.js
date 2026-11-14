@@ -65,6 +65,15 @@ CREATE TABLE IF NOT EXISTS spaces (
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS space_people (
+  space_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (space_id, user_id),
+  FOREIGN KEY (space_id) REFERENCES spaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS folders (
   id TEXT PRIMARY KEY,
   space_id TEXT NOT NULL,
@@ -390,6 +399,7 @@ CREATE INDEX IF NOT EXISTS idx_milestones_list ON milestones(list_id);
 CREATE INDEX IF NOT EXISTS idx_participants_task ON task_participants(task_id);
 CREATE INDEX IF NOT EXISTS idx_dependencies_task ON task_dependencies(task_id);
 CREATE INDEX IF NOT EXISTS idx_dependencies_dep ON task_dependencies(depends_on_task_id);
+CREATE INDEX IF NOT EXISTS idx_space_people_space ON space_people(space_id);
 CREATE INDEX IF NOT EXISTS idx_automations_list ON automation_rules(list_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_list ON meetings(list_id);
 CREATE INDEX IF NOT EXISTS idx_meeting_issues_meeting ON meeting_issues(meeting_id);

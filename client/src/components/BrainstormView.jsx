@@ -11,6 +11,7 @@ export default function BrainstormView({ listId, listName, statuses = [], onComm
   const [input, setInput] = useState('');
   const [adding, setAdding] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState('');
   const inputRef = useRef(null);
@@ -77,23 +78,48 @@ export default function BrainstormView({ listId, listName, statuses = [], onComm
     }
   }
 
+  function toggleSelected(id) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((current) => (
+      items.length && current.size === items.length
+        ? new Set()
+        : new Set(items.map((item) => item.id))
+    ));
+  }
+
   async function removeIdea(item) {
     try {
       await api.delete(`/brainstorm/${item.id}`);
       setItems((current) => current.filter((entry) => entry.id !== item.id));
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
     } catch (error) {
       toast(error.message, 'error');
     }
   }
 
-  async function commitAll() {
-    if (!items.length || committing) return;
+  async function commitSelected() {
+    if (!selectedIds.size || committing) return;
     setCommitting(true);
     try {
-      const result = await api.post(`/lists/${listId}/brainstorm/commit`, {});
-      toast(`${result.created} 个想法已送入「${result.status?.name || '待处理'}」`);
-      setItems([]);
-      await onCommitted?.();
+      const ids = [...selectedIds];
+      const result = await api.post(`/lists/${listId}/brainstorm/commit`, { item_ids: ids });
+      const remaining = items.filter((item) => !selectedIds.has(item.id));
+      toast(`${result.created} 个想法已送入「${result.status?.name || '待处理'}」，其余想法保留`);
+      setItems(remaining);
+      setSelectedIds(new Set());
+      await onCommitted?.(remaining.length);
     } catch (error) {
       toast(error.message, 'error');
     } finally {
@@ -108,7 +134,7 @@ export default function BrainstormView({ listId, listName, statuses = [], onComm
         <div className="brainstorm-hero-text">
           <span className="eyebrow-plain">BRAINSTORM</span>
           <h2>先把想法倒出来，再统一整理</h2>
-          <p>想到什么就写什么，不用担心状态、负责人或截止时间。完成后一键送入「{targetStatus?.name || '待处理'}」。</p>
+          <p>想到什么就写什么，不用担心状态、负责人或截止时间。整理后选择需要执行的想法送入「{targetStatus?.name || '待处理'}」。</p>
         </div>
         <div className="brainstorm-hero-target">
           <span>统一送入</span>
@@ -126,7 +152,14 @@ export default function BrainstormView({ listId, listName, statuses = [], onComm
               <h3>想法收集箱</h3>
               <p>{listName} · {items.length} 个想法待整理</p>
             </div>
-            <Sparkles size={17} />
+            <div className="brainstorm-capture-actions">
+              {items.length > 0 && (
+                <button type="button" className="brainstorm-select-all" onClick={toggleSelectAll}>
+                  {selectedIds.size === items.length ? '取消全选' : '全选'}
+                </button>
+              )}
+              <Sparkles size={17} />
+            </div>
           </div>
 
           <form className="brainstorm-composer" onSubmit={addIdea}>
@@ -143,14 +176,22 @@ export default function BrainstormView({ listId, listName, statuses = [], onComm
               {adding ? <Spinner size={14} /> : <Plus size={14} />} 添加
             </button>
           </form>
-          <p className="brainstorm-hint">可以连续添加多条，最后统一送到待处理，不会打断当前思路。</p>
+          <p className="brainstorm-hint">可以连续添加多条，之后勾选需要执行的想法送出，不会打断当前思路。</p>
 
           {loading ? (
             <div className="brainstorm-loading"><Spinner size={18} /> 正在读取想法…</div>
           ) : items.length ? (
             <div className="brainstorm-list">
               {items.map((item, index) => (
-                <div className="brainstorm-item" key={item.id}>
+                <div className={`brainstorm-item ${selectedIds.has(item.id) ? 'is-selected' : ''}`} key={item.id}>
+                  <label className="brainstorm-select">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(item.id)}
+                      onChange={() => toggleSelected(item.id)}
+                      aria-label={`选择想法：${item.name}`}
+                    />
+                  </label>
                   <span className="brainstorm-index">{String(index + 1).padStart(2, '0')}</span>
                   {editingId === item.id ? (
                     <input
@@ -198,17 +239,18 @@ export default function BrainstormView({ listId, listName, statuses = [], onComm
             <span className="brainstorm-summary-label">待整理</span>
             <strong>{items.length}</strong>
             <span>个想法</span>
+            <span className="brainstorm-selected-count">已选择 {selectedIds.size} 个</span>
             <button
               type="button"
               className="btn btn-primary brainstorm-commit"
-              onClick={commitAll}
-              disabled={!items.length || committing}
+              onClick={commitSelected}
+              disabled={!selectedIds.size || committing}
             >
               {committing ? <Spinner size={16} /> : <ListTodo size={16} />}
-              全部送到「{targetStatus?.name || '待处理'}」
+              送入选中的 {selectedIds.size || 0} 个
               {!committing && <ArrowRight size={15} />}
             </button>
-            <p>送入后会创建为普通任务，并保留在「{targetStatus?.name || '待处理'}」状态下。</p>
+            <p>只送入选中的想法，未选中的会保留在头脑风暴区。送入后创建为普通任务，并保留在「{targetStatus?.name || '待处理'}」状态。</p>
           </section>
           <section className="brainstorm-tips">
             <h4>使用建议</h4>

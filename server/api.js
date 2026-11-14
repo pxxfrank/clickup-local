@@ -338,6 +338,16 @@ function snapshotRetrospectiveTasks(db, listId, retrospectiveId, now) {
   return count;
 }
 
+function accessibleSpace(spaceId, userId) {
+  return getDb()
+    .prepare(
+      `SELECT sp.* FROM spaces sp
+       JOIN workspace_members wm ON wm.workspace_id = sp.workspace_id AND wm.user_id = ?
+       WHERE sp.id = ?`
+    )
+    .get(userId, spaceId);
+}
+
 function accessibleTask(taskId, userId) {
   return getDb()
     .prepare(
@@ -2062,7 +2072,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.14.0',
+      version: '1.15.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -2393,6 +2403,65 @@ export function createApiRouter() {
     ).run(id, workspaceId, name, req.body?.color || '#7B68EE', req.body?.icon || '🚀', 0, count, new Date().toISOString());
     logActivity(workspaceId, null, req.user.id, 'space_created', `创建了空间「${name}」`);
     res.status(201).json(db.prepare('SELECT * FROM spaces WHERE id = ?').get(id));
+  });
+
+  router.get('/spaces/:id/people', (req, res) => {
+    const space = accessibleSpace(req.params.id, req.user.id);
+    if (!space) return res.status(404).json({ error: '空间不存在' });
+    db.prepare(
+      `INSERT OR IGNORE INTO space_people (space_id, user_id, created_at)
+       SELECT DISTINCT ?, tp.user_id, ? FROM task_participants tp
+       JOIN tasks t ON t.id = tp.task_id JOIN lists l ON l.id = t.list_id
+       WHERE l.space_id = ?`
+    ).run(space.id, new Date().toISOString(), space.id);
+    const people = db
+      .prepare(
+        `SELECT u.id, u.name, u.email, u.color, u.title, sp.created_at,
+                CASE WHEN wc.user_id IS NULL THEN 0 ELSE 1 END AS is_external
+         FROM space_people sp JOIN users u ON u.id = sp.user_id
+         LEFT JOIN workspace_contacts wc ON wc.workspace_id = ? AND wc.user_id = u.id
+         WHERE sp.space_id = ? ORDER BY u.name`
+      )
+      .all(space.workspace_id, space.id)
+      .map((person) => ({ ...person, is_external: Boolean(person.is_external) }));
+    res.json({ people });
+  });
+
+  router.post('/spaces/:id/people', (req, res) => {
+    const space = accessibleSpace(req.params.id, req.user.id);
+    if (!space) return res.status(404).json({ error: '空间不存在' });
+    const userId = req.body?.user_id;
+    if (!userId || !isAssignable(space.workspace_id, userId)) {
+      return res.status(400).json({ error: '该人员不在当前工作空间的可选名单中' });
+    }
+    db.prepare('INSERT OR IGNORE INTO space_people (space_id, user_id, created_at) VALUES (?,?,?)').run(
+      space.id,
+      userId,
+      new Date().toISOString()
+    );
+    res.status(201).json({ ok: true });
+  });
+
+  router.delete('/spaces/:id/people/:userId', (req, res) => {
+    const space = accessibleSpace(req.params.id, req.user.id);
+    if (!space) return res.status(404).json({ error: '空间不存在' });
+    const userId = req.params.userId;
+    const usage = db
+      .prepare(
+        `SELECT DISTINCT t.id, t.name FROM task_participants tp
+         JOIN tasks t ON t.id = tp.task_id
+         JOIN lists l ON l.id = t.list_id
+         WHERE l.space_id = ? AND tp.user_id = ? AND t.archived = 0
+         ORDER BY t.name LIMIT 3`
+      )
+      .all(space.id, userId);
+    if (usage.length) {
+      return res.status(400).json({
+        error: `该相关人仍被任务「${usage.map((task) => task.name).join('、')}」使用，不能删除`,
+      });
+    }
+    db.prepare('DELETE FROM space_people WHERE space_id = ? AND user_id = ?').run(space.id, userId);
+    res.json({ ok: true });
   });
 
   router.patch('/spaces/:id', (req, res) => {
@@ -2952,10 +3021,16 @@ export function createApiRouter() {
   router.post('/lists/:id/brainstorm/commit', (req, res) => {
     const list = accessibleList(req.params.id, req.user.id);
     if (!list) return res.status(404).json({ error: '列表不存在' });
-    const items = db
+    const requestedIds = Array.isArray(req.body?.item_ids)
+      ? [...new Set(req.body.item_ids.filter(Boolean))]
+      : null;
+    const allItems = db
       .prepare('SELECT * FROM brainstorm_items WHERE list_id = ? ORDER BY order_index, created_at')
       .all(list.id);
-    if (!items.length) return res.status(400).json({ error: '头脑风暴区还没有想法' });
+    const items = requestedIds
+      ? allItems.filter((item) => requestedIds.includes(item.id))
+      : allItems;
+    if (!items.length) return res.status(400).json({ error: requestedIds ? '请选择要送入待处理的想法' : '头脑风暴区还没有想法' });
     const statuses = db.prepare('SELECT * FROM statuses WHERE list_id = ? ORDER BY order_index').all(list.id);
     const target = statuses.find((status) => status.type === 'open') || statuses[0];
     if (!target) return res.status(400).json({ error: '列表缺少可用的工作流状态' });
@@ -2988,7 +3063,12 @@ export function createApiRouter() {
           null
         );
       });
-      db.prepare('DELETE FROM brainstorm_items WHERE list_id = ?').run(list.id);
+      if (requestedIds) {
+        const deleteItem = db.prepare('DELETE FROM brainstorm_items WHERE id = ?');
+        for (const item of items) deleteItem.run(item.id);
+      } else {
+        db.prepare('DELETE FROM brainstorm_items WHERE list_id = ?').run(list.id);
+      }
       db.exec('COMMIT');
     } catch (error) {
       db.exec('ROLLBACK');
