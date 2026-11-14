@@ -51,11 +51,17 @@
 
 不想处理 Node.js、命令行或端口环境时，可以直接使用 Windows 安装包：
 
-**直接下载：** [ClickUp-Local-Setup-1.13.0.exe](https://github.com/pxxfrank/clickup-local/releases/download/v1.13.0/ClickUp-Local-Setup-1.13.0.exe)  
+**直接下载：** [ClickUp-Local-Setup-1.14.0.exe](https://github.com/pxxfrank/clickup-local/releases/download/v1.14.0/ClickUp-Local-Setup-1.14.0.exe)  
 **发布页：** [GitHub Releases](https://github.com/pxxfrank/clickup-local/releases/latest)  
-**文件名：** `ClickUp-Local-Setup-1.13.0.exe`（约 24 MB，已内置 Node.js 运行时）
+**文件名：** `ClickUp-Local-Setup-1.14.0.exe`（约 22 MB，已内置 Node.js 运行时）
 
 安装包支持 Windows 10 / 11 x64，安装到当前用户目录，**不需要管理员权限**，也不需要预装 Node.js。
+
+安装后约占 **91 MB**：
+- Node.js 运行时约 87 MB（无法省略，保证免安装 Node.js）
+- 应用、前端资源和服务端依赖约 4 MB
+
+后续可继续提供“轻量安装包”（要求系统已有 Node.js）以及服务端单文件打包，进一步压缩到约 4 MB 应用体积。
 
 安装后会提供：
 

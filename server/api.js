@@ -2062,7 +2062,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.13.0',
+      version: '1.14.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
