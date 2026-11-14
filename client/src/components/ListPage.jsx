@@ -11,6 +11,7 @@ import {
   Link2,
   List as ListIcon,
   MoreHorizontal,
+  Network,
   PenLine,
   Plus,
   Presentation,
@@ -44,6 +45,7 @@ import RetrospectiveView from './RetrospectiveView.jsx';
 import WeeklyReportModal from './WeeklyReportModal.jsx';
 import ListSettingsModal from './ListSettingsModal.jsx';
 import MeetingView from './MeetingView.jsx';
+import ProjectDependencyGraph from './ProjectDependencyGraph.jsx';
 
 const VIEWS = [
   { id: 'overview', label: '概览', icon: LayoutDashboard },
@@ -52,6 +54,7 @@ const VIEWS = [
   { id: 'board', label: '看板', icon: KanbanSquare },
   { id: 'calendar', label: '日历', icon: CalendarDays },
   { id: 'gantt', label: '甘特', icon: GanttChartSquare },
+  { id: 'dependencies', label: '依赖图', icon: Network },
   { id: 'meetings', label: '会议', icon: Presentation },
   { id: 'retrospective', label: '复盘', icon: ClipboardCheck },
 ];
@@ -493,7 +496,7 @@ export default function ListPage({ listId, view, onViewChange }) {
                 );
               })}
             </nav>
-            {view !== 'meetings' && (
+            {view !== 'meetings' && view !== 'dependencies' && (
               <div className="view-bar-actions">
                 <ViewToolbar
                   filters={filters}
@@ -553,6 +556,9 @@ export default function ListPage({ listId, view, onViewChange }) {
           />
         )}
         {view === 'gantt' && <GanttView tasks={filteredTasks} onOpenTask={openTask} />}
+        {view === 'dependencies' && (
+          <ProjectDependencyGraph tasks={data.tasks} onOpenTask={openTask} />
+        )}
         {view === 'meetings' && (
           <MeetingView
             list={list}

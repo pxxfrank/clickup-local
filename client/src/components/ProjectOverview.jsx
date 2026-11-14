@@ -10,13 +10,14 @@ import {
   Pencil,
   Plus,
   Sparkles,
+  Star,
   Target,
   Trash2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { addDays, addMonths, dueTone, format, formatDateSmart, parseDateValue, startOfMonth, todayKey, zhCN } from '../lib/date.js';
-import { ConfirmDialog, Modal, ProgressBar, Spinner } from './ui.jsx';
+import { Avatar, ConfirmDialog, Modal, ProgressBar, Spinner } from './ui.jsx';
 
 const PHASE_COLORS = ['#7B68EE', '#4A9EFF', '#2EA44F', '#F59E0B', '#F06A6A', '#EC4899'];
 const TIMELINE_CARD_WIDTH = 168;
@@ -68,7 +69,7 @@ export default function ProjectOverview({
   onOpenTask,
   onSaveAsTemplate,
 }) {
-  const { toast } = useApp();
+  const { toast, bootstrap } = useApp();
   const [editingPurpose, setEditingPurpose] = useState(false);
   const [purposeDraft, setPurposeDraft] = useState(list.purpose || '');
   const [savingPurpose, setSavingPurpose] = useState(false);
@@ -80,6 +81,8 @@ export default function ProjectOverview({
   const [savingPhase, setSavingPhase] = useState(false);
   const [deletePhaseTarget, setDeletePhaseTarget] = useState(null);
   const [deletingPhase, setDeletingPhase] = useState(false);
+  const [keyActionForm, setKeyActionForm] = useState(null);
+  const [savingKeyAction, setSavingKeyAction] = useState(false);
 
   useEffect(() => {
     setPurposeDraft(list.purpose || '');
@@ -126,6 +129,28 @@ export default function ProjectOverview({
       }),
     [phases]
   );
+
+  const keyActions = useMemo(
+    () =>
+      tasks
+        .filter((task) => task.is_key_action)
+        .sort((a, b) => {
+          const byDue = (a.due_date || '9999').localeCompare(b.due_date || '9999');
+          return byDue || a.name.localeCompare(b.name, 'zh-CN');
+        }),
+    [tasks]
+  );
+
+  const keyActionsForMilestone = (milestone) => {
+    const phase = phaseForMilestone(milestone);
+    return keyActions.filter((task) => {
+      if (!task.due_date) return false;
+      if (phase) return task.due_date >= phase.start_date && task.due_date <= milestone.due_date;
+      return task.due_date <= milestone.due_date && task.due_date >= format(addDays(parseDateValue(milestone.due_date), -14), 'yyyy-MM-dd');
+    });
+  };
+
+  const members = bootstrap?.assignees || bootstrap?.members || [];
 
   const upcomingTasks = useMemo(
     () =>
@@ -313,6 +338,40 @@ export default function ProjectOverview({
     }
   }
 
+  function openKeyAction() {
+    setKeyActionForm({
+      name: '',
+      description: '',
+      assignee_id: '',
+      start_date: '',
+      due_date: format(addDays(new Date(), 7), 'yyyy-MM-dd'),
+    });
+  }
+
+  async function saveKeyAction(event) {
+    event.preventDefault();
+    if (!keyActionForm?.name?.trim()) return;
+    setSavingKeyAction(true);
+    try {
+      await api.post('/tasks', {
+        list_id: list.id,
+        name: keyActionForm.name.trim(),
+        description: keyActionForm.description || '',
+        assignee_id: keyActionForm.assignee_id || null,
+        start_date: keyActionForm.start_date || null,
+        due_date: keyActionForm.due_date || null,
+        is_key_action: true,
+      });
+      setKeyActionForm(null);
+      await onChanged();
+      toast('关键动作已创建，并同步到任务');
+    } catch (error) {
+      toast(error.message, 'error');
+    } finally {
+      setSavingKeyAction(false);
+    }
+  }
+
   function openPhase(phase = null) {
     setPhaseForm(
       phase
@@ -424,6 +483,54 @@ export default function ProjectOverview({
         </div>
       </section>
 
+      <section className="overview-card overview-key-actions-card">
+        <div className="overview-card-head">
+          <div>
+            <h3><Star size={15} /> 关键动作 <span className="section-count">{keyActions.length}</span></h3>
+            <p>提前梳理项目最重要的动作；关键动作会同步到任务列表，并带日期出现在里程碑时间轴中。</p>
+          </div>
+          <button type="button" className="section-action" onClick={openKeyAction}>
+            <Plus size={13} /> 新建关键动作
+          </button>
+        </div>
+        {keyActions.length ? (
+          <div className="key-action-grid">
+            {keyActions.map((task) => {
+              const done = ['done', 'closed'].includes(task.status?.type);
+              const overdue = !done && task.due_date && task.due_date < todayKey();
+              return (
+                <button
+                  type="button"
+                  className={`key-action-row ${done ? 'is-done' : ''} ${overdue ? 'is-overdue' : ''}`}
+                  key={task.id}
+                  onClick={() => onOpenTask(task.id)}
+                >
+                  <span className="key-action-star"><Star size={13} /></span>
+                  <span className="key-action-main">
+                    <strong>{task.name}</strong>
+                    <span>
+                      {task.status?.name || '未设置状态'}
+                      {task.dependency_ids?.length ? ` · ${task.dependency_ids.length} 个前置` : ''}
+                    </span>
+                  </span>
+                  {task.assignee ? <Avatar user={task.assignee} size={21} /> : <span className="key-action-unassigned">未指派</span>}
+                  <span className={`key-action-date ${overdue ? 'is-overdue' : ''}`}>
+                    {task.due_date ? formatDateSmart(task.due_date) : '未排期'}
+                  </span>
+                  <span className="key-action-synced">已同步</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <button type="button" className="key-action-empty" onClick={openKeyAction}>
+            <Star size={17} />
+            <span>还没有关键动作。先梳理项目最重要的 3—7 个动作。</span>
+            <span>新建关键动作</span>
+          </button>
+        )}
+      </section>
+
       <section className="overview-card overview-timeline-card overview-timeline-full">
         <div className="overview-card-head">
           <div>
@@ -491,6 +598,7 @@ export default function ProjectOverview({
                 const days = differenceInDays(milestone.due_date);
                 const overdue = !milestone.completed && days < 0;
                 const soon = !milestone.completed && days >= 0 && days <= 7;
+                const milestoneKeyActions = keyActionsForMilestone(milestone);
                 return (
                   <div
                     className={`timeline-ms ${milestone.completed ? 'is-completed' : ''} ${overdue ? 'is-overdue' : ''}`}
@@ -518,6 +626,16 @@ export default function ProjectOverview({
                       </div>
                       <h4>{milestone.name}</h4>
                       {milestone.description && <p className="milestone-desc">{milestone.description}</p>}
+                      {milestoneKeyActions.length > 0 && (
+                        <p
+                          className="timeline-ms-keyactions"
+                          title={milestoneKeyActions.map((task) => task.name).join('、')}
+                        >
+                          <Star size={8} />
+                          {milestoneKeyActions.slice(0, 2).map((task) => task.name).join('、')}
+                          {milestoneKeyActions.length > 2 ? ` +${milestoneKeyActions.length - 2}` : ''}
+                        </p>
+                      )}
                     </div>
                     <span
                       className="timeline-ms-connector"
@@ -663,6 +781,72 @@ export default function ProjectOverview({
           </div>
         </section>
       </div>
+
+      <Modal
+        open={Boolean(keyActionForm)}
+        onClose={() => setKeyActionForm(null)}
+        title="新建关键动作"
+        subtitle="关键动作会同步创建一个任务，并出现在项目全景和依赖图中"
+        width={520}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setKeyActionForm(null)}>取消</button>
+            <button type="submit" form="key-action-form" className="btn btn-primary" disabled={savingKeyAction || !keyActionForm?.name?.trim()}>
+              {savingKeyAction ? <Spinner size={15} /> : <Star size={15} />} 创建并同步
+            </button>
+          </>
+        }
+      >
+        {keyActionForm && (
+          <form id="key-action-form" className="stack" onSubmit={saveKeyAction}>
+            <label className="field">
+              <span className="field-label">关键动作</span>
+              <input
+                className="input"
+                autoFocus
+                value={keyActionForm.name}
+                onChange={(event) => setKeyActionForm({ ...keyActionForm, name: event.target.value })}
+                placeholder="例如：完成首批客户验收"
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">补充描述（可选）</span>
+              <textarea
+                className="input textarea"
+                rows={3}
+                value={keyActionForm.description}
+                onChange={(event) => setKeyActionForm({ ...keyActionForm, description: event.target.value })}
+                placeholder="这个动作的预期结果或验收标准"
+              />
+            </label>
+            <div className="form-grid-2">
+              <label className="field">
+                <span className="field-label">负责人</span>
+                <select
+                  className="input"
+                  value={keyActionForm.assignee_id}
+                  onChange={(event) => setKeyActionForm({ ...keyActionForm, assignee_id: event.target.value })}
+                >
+                  <option value="">暂不指派</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>{member.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">截止日期</span>
+                <input
+                  className="input"
+                  type="date"
+                  value={keyActionForm.due_date}
+                  onChange={(event) => setKeyActionForm({ ...keyActionForm, due_date: event.target.value })}
+                />
+              </label>
+            </div>
+            <p className="phase-form-hint">创建后可在任务详情中调整依赖、状态和日期；依赖图默认会展示“关键动作 + 依赖链”。</p>
+          </form>
+        )}
+      </Modal>
 
       <Modal
         open={Boolean(phaseForm)}

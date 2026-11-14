@@ -20,6 +20,7 @@ import {
   Plus,
   Repeat,
   Send,
+  Star,
   Tag as TagIcon,
   Trash2,
   Upload,
@@ -734,6 +735,16 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                       )}
                       <p className="participant-hint">参与人会收到任务上下文，但负责人仍然只有一位。</p>
                     </Popover>
+
+                    <button
+                      type="button"
+                      className={`quick-pill is-key ${detail.is_key_action ? 'is-active' : 'is-empty'}`}
+                      onClick={() => patchTask({ is_key_action: !detail.is_key_action })}
+                      title={detail.is_key_action ? '取消关键动作标记' : '标记为关键动作'}
+                    >
+                      <Star size={14} />
+                      {detail.is_key_action ? '关键动作' : '设为关键动作'}
+                    </button>
 
                     <Popover
                       width={260}

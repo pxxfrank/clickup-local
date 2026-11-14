@@ -428,6 +428,9 @@ export function getDb() {
   if (!taskColumns.some((column) => column.name === 'recurrence_until')) {
     database.exec('ALTER TABLE tasks ADD COLUMN recurrence_until TEXT');
   }
+  if (!taskColumns.some((column) => column.name === 'is_key_action')) {
+    database.exec('ALTER TABLE tasks ADD COLUMN is_key_action INTEGER NOT NULL DEFAULT 0');
+  }
   const row = database.prepare('SELECT COUNT(*) AS count FROM users').get();
   if (!row || row.count === 0) {
     seedDatabase(database);

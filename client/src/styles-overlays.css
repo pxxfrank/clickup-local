@@ -181,6 +181,16 @@
   white-space: nowrap;
 }
 
+.quick-pill.is-key.is-active {
+  color: #b77900;
+  border-color: #f0d08a;
+  background: #fff9e8;
+}
+
+.quick-pill.is-key.is-active svg {
+  fill: #f2b94b;
+}
+
 .quick-pill:hover {
   background: var(--surface);
   border-color: var(--line-strong);

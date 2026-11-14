@@ -1540,8 +1540,8 @@ export function createApiRouter() {
     const now = new Date().toISOString();
     const completedAt = status.type === 'done' || status.type === 'closed' ? now : null;
     db.prepare(
-      `INSERT INTO tasks (id, list_id, parent_id, name, description, status_id, priority, assignee_id, start_date, due_date, time_estimate, order_index, created_by, created_at, updated_at, completed_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      `INSERT INTO tasks (id, list_id, parent_id, name, description, status_id, priority, assignee_id, start_date, due_date, time_estimate, order_index, created_by, created_at, updated_at, completed_at, is_key_action)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       id,
       list.id,
@@ -1558,7 +1558,8 @@ export function createApiRouter() {
       req.user.id,
       now,
       now,
-      completedAt
+      completedAt,
+      body.is_key_action ? 1 : 0
     );
     const tagIds = Array.isArray(body.tag_ids) ? body.tag_ids : [];
     for (const tagId of tagIds) {
@@ -1665,6 +1666,11 @@ export function createApiRouter() {
     if (body.archived !== undefined) {
       updates.push('archived = ?');
       values.push(body.archived ? 1 : 0);
+    }
+    if (body.is_key_action !== undefined) {
+      updates.push('is_key_action = ?');
+      values.push(body.is_key_action ? 1 : 0);
+      messages.push(body.is_key_action ? '标记为关键动作' : '取消关键动作标记');
     }
     if (body.recurrence_frequency !== undefined) {
       const frequency = ['none', 'daily', 'weekly', 'monthly'].includes(body.recurrence_frequency)
@@ -2056,7 +2062,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.12.0',
+      version: '1.13.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
