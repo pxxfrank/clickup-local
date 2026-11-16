@@ -65,12 +65,16 @@ export default function CreateTaskModal({ defaults, onClose }) {
   const selectedList = lists.find((entry) => entry.list.id === listId);
   const selectedStatus = statuses.find((status) => status.id === statusId);
   const assigneeOptions = useMemo(() => {
-    const result = [...members];
+    const result = members.filter((person) => !person.is_external);
     for (const contact of contacts) {
       if (!result.some((person) => person.id === contact.id)) result.push(contact);
     }
+    if (assigneeId && !result.some((person) => person.id === assigneeId)) {
+      const selected = members.find((person) => person.id === assigneeId);
+      if (selected) result.push(selected);
+    }
     return result;
-  }, [members, contacts]);
+  }, [members, contacts, assigneeId]);
 
   async function submit(event) {
     event?.preventDefault();

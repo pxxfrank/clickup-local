@@ -1502,6 +1502,18 @@ export function createApiRouter() {
   router.get('/lists/:id/contacts', (req, res) => {
     const list = accessibleList(req.params.id, req.user.id);
     if (!list) return res.status(404).json({ error: '列表不存在' });
+    // Bring external people added from the assignee picker or used by tasks
+    // into the list-level directory, so both entry points share one source.
+    db.prepare(
+      `INSERT OR IGNORE INTO list_contacts (list_id, user_id, created_at)
+       SELECT DISTINCT ?, wc.user_id, ?
+       FROM workspace_contacts wc
+       WHERE wc.workspace_id = ? AND wc.user_id IN (
+         SELECT t.assignee_id FROM tasks t WHERE t.list_id = ? AND t.assignee_id IS NOT NULL
+         UNION
+         SELECT tp.user_id FROM task_participants tp JOIN tasks t ON t.id = tp.task_id WHERE t.list_id = ?
+       )`
+    ).run(list.id, new Date().toISOString(), list.workspace_id, list.id, list.id);
     const contacts = db
       .prepare(
         `SELECT u.id, u.name, u.email, u.color, u.title, lc.created_at
@@ -1531,6 +1543,14 @@ export function createApiRouter() {
         )
         .get(list.workspace_id, name);
       if (member) return res.status(400).json({ error: '该人员是团队成员，不需要添加为外部责任人' });
+    }
+    if (!user) {
+      user = db
+        .prepare(
+          `SELECT u.* FROM workspace_contacts wc JOIN users u ON u.id = wc.user_id
+           WHERE wc.workspace_id = ? AND lower(u.name) = lower(?) LIMIT 1`
+        )
+        .get(list.workspace_id, name);
     }
     if (!user) {
       user = db
@@ -2193,7 +2213,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.16.0',
+      version: '1.17.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -3725,6 +3745,17 @@ export function createApiRouter() {
         new Date().toISOString()
       );
       logActivity(workspaceId, null, req.user.id, 'contact_added', `添加了外部责任人 ${user.name}`);
+    }
+    if (req.body?.list_id) {
+      const list = accessibleList(req.body.list_id, req.user.id);
+      if (!list || list.workspace_id !== workspaceId) {
+        return res.status(400).json({ error: '外部责任人所属列表无效' });
+      }
+      db.prepare('INSERT OR IGNORE INTO list_contacts (list_id, user_id, created_at) VALUES (?,?,?)').run(
+        list.id,
+        user.id,
+        new Date().toISOString()
+      );
     }
     res.status(alreadyContact || isMember ? 200 : 201).json({
       ...publicUser(user),

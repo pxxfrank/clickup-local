@@ -13,6 +13,7 @@ import {
   GitBranch,
   Link2,
   ListPlus,
+  Maximize2,
   MessageSquare,
   MoreHorizontal,
   Paperclip,
@@ -83,6 +84,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   const [addingContact, setAddingContact] = useState(false);
   const [dependencyTasks, setDependencyTasks] = useState([]);
   const [dependencyGraphOpen, setDependencyGraphOpen] = useState(false);
+  const [dependencyFullscreen, setDependencyFullscreen] = useState(false);
   const [meetingOptions, setMeetingOptions] = useState([]);
   const [spacePeople, setSpacePeople] = useState([]);
   const [listContacts, setListContacts] = useState([]);
@@ -99,8 +101,15 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
     }
     return result;
   };
-  const assigneeOptions = mergePeople(assignablePeople, listContacts);
-  const participantOptions = mergePeople(spacePeople.length ? spacePeople : assignablePeople, listContacts);
+  const memberOptions = assignablePeople.filter((person) => !person.is_external);
+  const assigneeOptions = mergePeople(memberOptions, listContacts);
+  if (detail?.assignee && !assigneeOptions.some((person) => person.id === detail.assignee.id)) {
+    assigneeOptions.push(detail.assignee);
+  }
+  const participantBase = spacePeople.length
+    ? spacePeople
+    : mergePeople(memberOptions, listContacts);
+  const participantOptions = mergePeople(participantBase, listContacts);
   const workspaceTags = bootstrap?.tags || [];
   useEffect(() => {
     if (!detail?.list?.id) {
@@ -520,10 +529,15 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
     if (!trimmed || !detail) return;
     setAddingContact(true);
     try {
-      const contact = await api.post(`/workspaces/${detail.list.workspace_id}/contacts`, { name: trimmed });
+      const contact = await api.post(`/workspaces/${detail.list.workspace_id}/contacts`, {
+        name: trimmed,
+        list_id: detail.list.id,
+      });
       const updated = await api.patch(`/tasks/${detail.id}`, { assignee_id: contact.id });
       setDetail(updated);
       setContactDraft('');
+      const contactData = await api.get(`/lists/${detail.list.id}/contacts`);
+      setListContacts(contactData.contacts || []);
       await refresh();
       toast(`已指派给外部责任人「${contact.name}」`);
       close?.();
@@ -1010,9 +1024,28 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                           依赖关系
                           {detail.dependencies?.length > 0 && <span className="section-count">{detail.dependencies.length}</span>}
                         </h3>
-                        <button type="button" className="section-action" onClick={() => setDependencyGraphOpen(true)}>
-                          <GitBranch size={13} /> 编辑依赖
-                        </button>
+                        <div className="dependency-section-actions">
+                          <button
+                            type="button"
+                            className="section-action"
+                            onClick={() => {
+                              setDependencyFullscreen(true);
+                              setDependencyGraphOpen(true);
+                            }}
+                          >
+                            <Maximize2 size={13} /> 放大
+                          </button>
+                          <button
+                            type="button"
+                            className="section-action"
+                            onClick={() => {
+                              setDependencyFullscreen(false);
+                              setDependencyGraphOpen(true);
+                            }}
+                          >
+                            <GitBranch size={13} /> 编辑依赖
+                          </button>
+                        </div>
                       </div>
                       <DependencyGraphCanvas task={detail} tasks={dependencyTasks} compact />
                     </section>
@@ -1440,9 +1473,14 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
 
       <DependencyGraphModal
         open={dependencyGraphOpen}
-        onClose={() => setDependencyGraphOpen(false)}
+        onClose={() => {
+          setDependencyGraphOpen(false);
+          setDependencyFullscreen(false);
+        }}
         task={detail}
         tasks={dependencyTasks}
+        fullscreen={dependencyFullscreen}
+        onToggleFullscreen={() => setDependencyFullscreen((current) => !current)}
         onToggleDependency={toggleDependency}
       />
 

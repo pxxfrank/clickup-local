@@ -2374,6 +2374,55 @@
   background: #fafafd;
 }
 
+.dependency-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dependency-graph-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 8px;
+  color: var(--muted-2);
+  font-size: 9px;
+}
+
+.dependency-graph-modal.is-fullscreen {
+  width: 96vw !important;
+  height: 92vh;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dependency-graph-modal.is-fullscreen .modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dependency-graph-modal.is-fullscreen .dependency-graph-layout {
+  height: 100%;
+  min-height: 0;
+}
+
+.dependency-graph-modal.is-fullscreen .dependency-graph-main,
+.dependency-graph-modal.is-fullscreen .dependency-graph-side {
+  min-height: 0;
+  overflow: auto;
+}
+
+.dependency-graph-modal.is-fullscreen .dependency-graph-scroll {
+  max-height: calc(92vh - 190px);
+}
+
+.dependency-graph-modal.is-fullscreen .dependency-graph-side {
+  max-height: calc(92vh - 150px);
+}
+
 .dependency-graph-scroll {
   overflow: auto;
   border: 1px solid var(--line);
@@ -2427,13 +2476,15 @@
 }
 
 .dependency-node.is-upstream {
-  border-color: #d9d2ff;
-  background: #fdfcff;
+  border-color: #e5a43c;
+  border-left-width: 4px;
+  background: #fff8ea;
 }
 
 .dependency-node.is-downstream {
-  border-color: #d8e8ff;
-  background: #fbfdff;
+  border-color: #2fa99a;
+  border-left-width: 4px;
+  background: #eafbf7;
 }
 
 .dependency-node.is-current {
@@ -2471,6 +2522,24 @@
   font-style: normal;
 }
 
+.dependency-node-role {
+  flex: none;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 7.5px;
+  font-weight: 650;
+}
+
+.dependency-node-role.is-upstream {
+  background: #f3c466;
+  color: #6f4705;
+}
+
+.dependency-node-role.is-downstream {
+  background: #63c9bb;
+  color: #0b5149;
+}
+
 .dependency-node-meta {
   display: flex;
   justify-content: space-between;
@@ -2504,8 +2573,8 @@
 }
 
 .dependency-graph-legend i.is-upstream {
-  border-color: #d9d2ff;
-  background: #fdfcff;
+  border-color: #e5a43c;
+  background: #fff8ea;
 }
 
 .dependency-graph-legend i.is-current {
@@ -2514,8 +2583,8 @@
 }
 
 .dependency-graph-legend i.is-downstream {
-  border-color: #d8e8ff;
-  background: #fbfdff;
+  border-color: #2fa99a;
+  background: #eafbf7;
 }
 
 .dependency-graph-side {

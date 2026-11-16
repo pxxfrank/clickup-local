@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { GitBranch, MoveRight } from 'lucide-react';
+import { GitBranch, Maximize2, Minimize2, MoveRight } from 'lucide-react';
 import { formatDateSmart } from '../lib/date.js';
 import { Modal } from './ui.jsx';
 
@@ -107,7 +107,7 @@ function buildGraph(task, tasks) {
   return { nodes, links, positions, width, height };
 }
 
-export default function DependencyGraphModal({ open, onClose, task, tasks, onToggleDependency }) {
+export default function DependencyGraphModal({ open, onClose, task, tasks, fullscreen = false, onToggleFullscreen, onToggleDependency }) {
   const allTasks = useMemo(
     () => (task ? [task, ...(tasks || []).filter((item) => item.id !== task.id)] : []),
     [task, tasks]
@@ -150,12 +150,21 @@ export default function DependencyGraphModal({ open, onClose, task, tasks, onTog
       onClose={onClose}
       title="任务依赖图"
       subtitle="箭头从前置任务指向后续任务；左侧为上游，右侧为下游"
-      width={1060}
-      className="dependency-graph-modal"
+      width={fullscreen ? 'min(1500px, 96vw)' : 1060}
+      className={`dependency-graph-modal ${fullscreen ? 'is-fullscreen' : ''}`}
       footer={<button type="button" className="btn btn-ghost" onClick={onClose}>关闭</button>}
     >
       <div className="dependency-graph-layout">
         <div className="dependency-graph-main">
+          {onToggleFullscreen && (
+            <div className="dependency-graph-toolbar">
+              <span>画布</span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onToggleFullscreen}>
+                {fullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                {fullscreen ? '还原' : '放大查看'}
+              </button>
+            </div>
+          )}
           {graph.nodes.length === 1 ? (
             <div className="dependency-graph-empty">
               <GitBranch size={26} />
@@ -194,6 +203,8 @@ export default function DependencyGraphModal({ open, onClose, task, tasks, onTog
                       <div className="dependency-node-top">
                         <span className="status-dot" style={{ background: node.status?.color || '#87909e' }} />
                         <strong>{node.name}</strong>
+                        {isDependency && <span className="dependency-node-role is-upstream">前置</span>}
+                        {isDependent && <span className="dependency-node-role is-downstream">后续</span>}
                         {isCurrent && <em>当前</em>}
                       </div>
                       <div className="dependency-node-meta">
@@ -306,6 +317,8 @@ export function DependencyGraphCanvas({ task, tasks, compact = false }) {
                 <div className="dependency-node-top">
                   <span className="status-dot" style={{ background: node.status?.color || '#87909e' }} />
                   <strong>{node.name}</strong>
+                  {isDependency && <span className="dependency-node-role is-upstream">前置</span>}
+                  {isDependent && <span className="dependency-node-role is-downstream">后续</span>}
                   {isCurrent && <em>当前</em>}
                 </div>
                 <div className="dependency-node-meta">
