@@ -1499,6 +1499,137 @@ export function createApiRouter() {
     res.json({ workspace, projects, totals });
   });
 
+  router.get('/lists/:id/journal', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const notes = db
+      .prepare(
+        `SELECT pn.*, u.name AS user_name, u.color AS user_color
+         FROM project_notes pn LEFT JOIN users u ON u.id = pn.created_by
+         WHERE pn.list_id = ?`
+      )
+      .all(list.id)
+      .map((note) => ({
+        id: `note-${note.id}`,
+        source_id: note.id,
+        kind: 'note',
+        title: note.title,
+        body: note.body || '',
+        user_name: note.user_name,
+        user_color: note.user_color,
+        created_at: note.updated_at || note.created_at,
+      }));
+    const progress = db
+      .prepare(
+        `SELECT c.id, c.body, c.created_at, t.id AS task_id, t.name AS task_name,
+                u.name AS user_name, u.color AS user_color
+         FROM comments c JOIN tasks t ON t.id = c.task_id
+         LEFT JOIN users u ON u.id = c.user_id WHERE t.list_id = ?`
+      )
+      .all(list.id)
+      .map((comment) => ({
+        id: `progress-${comment.id}`,
+        source_id: comment.id,
+        kind: 'progress',
+        task_id: comment.task_id,
+        task_name: comment.task_name,
+        body: comment.body,
+        user_name: comment.user_name,
+        user_color: comment.user_color,
+        created_at: comment.created_at,
+      }));
+    const activity = db
+      .prepare(
+        `SELECT a.id, a.type, a.message, a.created_at, t.id AS task_id, t.name AS task_name,
+                u.name AS user_name, u.color AS user_color
+         FROM activity a JOIN tasks t ON t.id = a.task_id
+         LEFT JOIN users u ON u.id = a.user_id WHERE t.list_id = ?`
+      )
+      .all(list.id)
+      .map((item) => ({
+        id: `activity-${item.id}`,
+        source_id: item.id,
+        kind: 'activity',
+        activity_type: item.type,
+        task_id: item.task_id,
+        task_name: item.task_name,
+        body: item.message,
+        user_name: item.user_name,
+        user_color: item.user_color,
+        created_at: item.created_at,
+      }));
+    const meetings = db
+      .prepare('SELECT id, title, meeting_at, created_at FROM meetings WHERE list_id = ?')
+      .all(list.id)
+      .map((meeting) => ({
+        id: `meeting-${meeting.id}`,
+        source_id: meeting.id,
+        kind: 'meeting',
+        title: meeting.title,
+        created_at: meeting.meeting_at || meeting.created_at,
+      }));
+    const counts = {
+      note: notes.length,
+      progress: progress.length,
+      activity: activity.length,
+      meeting: meetings.length,
+    };
+    const items = [...notes, ...progress, ...activity, ...meetings]
+      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+      .slice(0, 240);
+    res.json({ items, counts });
+  });
+
+  router.post('/lists/:id/journal', (req, res) => {
+    const list = accessibleList(req.params.id, req.user.id);
+    if (!list) return res.status(404).json({ error: '列表不存在' });
+    const title = String(req.body?.title || '').trim();
+    const body = String(req.body?.body || '');
+    if (!title) return res.status(400).json({ error: '记录标题不能为空' });
+    const id = randomId();
+    const now = new Date().toISOString();
+    db.prepare(
+      'INSERT INTO project_notes (id, list_id, title, body, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?)'
+    ).run(id, list.id, title, body, req.user.id, now, now);
+    logActivity(list.workspace_id, null, req.user.id, 'project_note', `记录了项目事项「${title}」`);
+    res.status(201).json(db.prepare('SELECT * FROM project_notes WHERE id = ?').get(id));
+  });
+
+  router.patch('/journal/:id', (req, res) => {
+    const note = db
+      .prepare(
+        `SELECT pn.*, s.workspace_id FROM project_notes pn JOIN lists l ON l.id = pn.list_id
+         JOIN spaces s ON s.id = l.space_id
+         JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = ?
+         WHERE pn.id = ?`
+      )
+      .get(req.user.id, req.params.id);
+    if (!note) return res.status(404).json({ error: '项目记录不存在' });
+    const title = req.body?.title !== undefined ? String(req.body.title).trim() : note.title;
+    if (!title) return res.status(400).json({ error: '记录标题不能为空' });
+    db.prepare('UPDATE project_notes SET title = ?, body = ?, updated_at = ? WHERE id = ?').run(
+      title,
+      req.body?.body !== undefined ? String(req.body.body) : note.body,
+      new Date().toISOString(),
+      note.id
+    );
+    res.json(db.prepare('SELECT * FROM project_notes WHERE id = ?').get(note.id));
+  });
+
+  router.delete('/journal/:id', (req, res) => {
+    const note = db
+      .prepare(
+        `SELECT pn.*, s.workspace_id FROM project_notes pn JOIN lists l ON l.id = pn.list_id
+         JOIN spaces s ON s.id = l.space_id
+         JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = ?
+         WHERE pn.id = ?`
+      )
+      .get(req.user.id, req.params.id);
+    if (!note) return res.status(404).json({ error: '项目记录不存在' });
+    db.prepare('DELETE FROM project_notes WHERE id = ?').run(note.id);
+    res.json({ ok: true });
+  });
+
   router.get('/lists/:id/contacts', (req, res) => {
     const list = accessibleList(req.params.id, req.user.id);
     if (!list) return res.status(404).json({ error: '列表不存在' });
@@ -2213,7 +2344,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.17.0',
+      version: '1.18.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -2439,6 +2570,18 @@ export function createApiRouter() {
       workload,
       completed_series: completedSeries,
       schedule_tasks: scheduleTasks,
+      stat_tasks: all.map((task) => ({
+        id: task.id,
+        name: task.name,
+        due_date: task.due_date,
+        completed_at: task.completed_at,
+        priority: task.priority,
+        status: { type: task.status_type, name: task.status_name, color: task.status_color },
+        list: { id: task.list_id, name: task.list_name, color: task.list_color },
+        assignee: task.assignee_id
+          ? { id: task.assignee_id, name: task.assignee_name, color: task.assignee_color }
+          : null,
+      })),
     });
   });
 

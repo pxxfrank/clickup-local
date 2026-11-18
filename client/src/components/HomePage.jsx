@@ -17,7 +17,7 @@ import {
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { format, formatDateSmart, greeting, parseDateValue, relativeTime, zhCN } from '../lib/date.js';
-import { Avatar, DueBadge, EmptyState, PriorityFlag, ProgressBar, Spinner } from './ui.jsx';
+import { Avatar, DueBadge, EmptyState, Modal, PriorityFlag, ProgressBar, Spinner } from './ui.jsx';
 import CalendarView from './CalendarView.jsx';
 import HomeTimeline from './HomeTimeline.jsx';
 
@@ -33,6 +33,7 @@ export default function HomePage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [scheduleView, setScheduleView] = useState('calendar');
+  const [statFilter, setStatFilter] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +52,25 @@ export default function HomePage() {
       cancelled = true;
     };
   }, [bootstrap?.workspace?.id, dataVersion, toast]);
+
+  const statTaskSets = useMemo(() => {
+    const tasks = data?.stat_tasks || [];
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const weekAgo = new Date(Date.now() - 6 * 86400000);
+    weekAgo.setHours(0, 0, 0, 0);
+    const open = tasks.filter((task) => !['done', 'closed'].includes(task.status?.type));
+    return {
+      open,
+      dueToday: open.filter((task) => task.due_date === today),
+      completedThisWeek: tasks.filter(
+        (task) =>
+          ['done', 'closed'].includes(task.status?.type) &&
+          task.completed_at &&
+          new Date(task.completed_at) >= weekAgo
+      ),
+      overdue: open.filter((task) => task.due_date && task.due_date < today),
+    };
+  }, [data]);
 
   const maxSeries = Math.max(1, ...(data?.completed_series?.map((item) => item.count) || [1]));
   const weekTotal = data?.completed_series?.reduce((sum, item) => sum + item.count, 0) || 0;
@@ -84,6 +104,8 @@ export default function HomePage() {
       : data.stats.dueToday > 0
         ? `今天有 ${data.stats.dueToday} 个任务到期，保持专注。`
         : '今天没有紧急到期任务，适合推进长期项目。';
+  const activeStat = STAT_CARDS.find((card) => card.key === statFilter) || null;
+  const activeStatTasks = statFilter ? statTaskSets[statFilter] || [] : [];
 
   return (
     <div className="home-page">
@@ -127,7 +149,12 @@ export default function HomePage() {
           const Icon = card.icon;
           const value = data.stats[card.key];
           return (
-            <div key={card.key} className={`stat-card tone-${card.tone}`}>
+            <button
+              type="button"
+              key={card.key}
+              className={`stat-card tone-${card.tone}`}
+              onClick={() => setStatFilter(card.key)}
+            >
               <div className="stat-card-top">
                 <span className="stat-icon"><Icon size={18} /></span>
                 <span className="stat-label">{card.label}</span>
@@ -135,7 +162,7 @@ export default function HomePage() {
               </div>
               <div className="stat-value">{value}</div>
               <div className="stat-hint">{card.hint}</div>
-            </div>
+            </button>
           );
         })}
       </section>
@@ -300,6 +327,59 @@ export default function HomePage() {
           </div>
         </section>
       </div>
+
+      <Modal
+        open={Boolean(activeStat)}
+        onClose={() => setStatFilter(null)}
+        title={activeStat ? `${activeStat.label}（${activeStatTasks.length}）` : ''}
+        subtitle={activeStat?.hint}
+        width={760}
+        footer={<button type="button" className="btn btn-ghost" onClick={() => setStatFilter(null)}>关闭</button>}
+      >
+        {activeStatTasks.length ? (
+          <div className="home-stat-task-list">
+            {activeStatTasks.map((task) => (
+              <button
+                type="button"
+                className="home-stat-task-row"
+                key={task.id}
+                onClick={() => {
+                  setStatFilter(null);
+                  openTask(task.id);
+                }}
+              >
+                <span className="status-dot" style={{ background: task.status?.color || '#87909e' }} />
+                <span className="home-stat-task-main">
+                  <strong>{task.name}</strong>
+                  <span>
+                    <span className="list-color-dot" style={{ background: task.list?.color }} />
+                    {task.list?.name}
+                    <em>·</em>
+                    {task.status?.name}
+                  </span>
+                </span>
+                <span className="home-stat-task-meta">
+                  {activeStat?.key === 'completedThisWeek'
+                    ? task.completed_at
+                      ? `完成于 ${formatDateSmart(task.completed_at)}`
+                      : ''
+                    : task.due_date
+                      ? `截止 ${formatDateSmart(task.due_date)}`
+                      : '无日期'}
+                </span>
+                <PriorityFlag priority={task.priority} />
+                {task.assignee ? <Avatar user={task.assignee} size={22} /> : <span className="home-stat-unassigned">未指派</span>}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            compact
+            title="这个分类下暂时没有任务"
+            description="任务状态、日期或完成时间变化后，会自动出现在这里。"
+          />
+        )}
+      </Modal>
     </div>
   );
 }

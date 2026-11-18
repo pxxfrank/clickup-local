@@ -152,6 +152,17 @@ CREATE TABLE IF NOT EXISTS project_templates (
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS project_notes (
+  id TEXT PRIMARY KEY,
+  list_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT DEFAULT '',
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS brainstorm_items (
   id TEXT PRIMARY KEY,
   list_id TEXT NOT NULL,
@@ -405,6 +416,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status_id);
 CREATE INDEX IF NOT EXISTS idx_activity_workspace ON activity(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_brainstorm_list ON brainstorm_items(list_id);
+CREATE INDEX IF NOT EXISTS idx_project_notes_list ON project_notes(list_id);
 CREATE INDEX IF NOT EXISTS idx_milestones_list ON milestones(list_id);
 CREATE INDEX IF NOT EXISTS idx_participants_task ON task_participants(task_id);
 CREATE INDEX IF NOT EXISTS idx_dependencies_task ON task_dependencies(task_id);

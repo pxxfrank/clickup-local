@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BookOpen,
   CalendarDays,
   ClipboardCheck,
   FileText,
@@ -46,9 +47,11 @@ import WeeklyReportModal from './WeeklyReportModal.jsx';
 import ListSettingsModal from './ListSettingsModal.jsx';
 import MeetingView from './MeetingView.jsx';
 import ProjectDependencyGraph from './ProjectDependencyGraph.jsx';
+import JournalView from './JournalView.jsx';
 
 const VIEWS = [
   { id: 'overview', label: '概览', icon: LayoutDashboard },
+  { id: 'journal', label: '记录', icon: BookOpen },
   { id: 'brainstorm', label: '头脑风暴', icon: Lightbulb },
   { id: 'list', label: '列表', icon: ListIcon },
   { id: 'board', label: '看板', icon: KanbanSquare },
@@ -496,7 +499,7 @@ export default function ListPage({ listId, view, onViewChange }) {
                 );
               })}
             </nav>
-            {view !== 'meetings' && view !== 'dependencies' && (
+            {view !== 'meetings' && view !== 'dependencies' && view !== 'journal' && (
               <div className="view-bar-actions">
                 <ViewToolbar
                   filters={filters}
@@ -558,6 +561,14 @@ export default function ListPage({ listId, view, onViewChange }) {
         {view === 'gantt' && <GanttView tasks={filteredTasks} onOpenTask={openTask} />}
         {view === 'dependencies' && (
           <ProjectDependencyGraph tasks={data.tasks} onOpenTask={openTask} />
+        )}
+        {view === 'journal' && (
+          <JournalView
+            list={list}
+            tasks={data.tasks}
+            onOpenTask={openTask}
+            onChanged={refresh}
+          />
         )}
         {view === 'meetings' && (
           <MeetingView
