@@ -48,6 +48,7 @@ import ListSettingsModal from './ListSettingsModal.jsx';
 import MeetingView from './MeetingView.jsx';
 import ProjectDependencyGraph from './ProjectDependencyGraph.jsx';
 import JournalView from './JournalView.jsx';
+import ProjectNoteModal from './ProjectNoteModal.jsx';
 
 const VIEWS = [
   { id: 'overview', label: '概览', icon: LayoutDashboard },
@@ -79,6 +80,7 @@ export default function ListPage({ listId, view, onViewChange }) {
   const [templateName, setTemplateName] = useState('');
   const [templateBusy, setTemplateBusy] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [completionNoteTask, setCompletionNoteTask] = useState(null);
   const [prefs, setPrefs] = useLocalStorage(`clickup:view-prefs:${listId}`, {
     sort: 'manual',
     group: 'status',
@@ -210,8 +212,10 @@ export default function ListPage({ listId, view, onViewChange }) {
     try {
       await api.patch(`/tasks/${task.id}`, patch);
       await refresh();
+      return true;
     } catch (requestError) {
       toast(requestError.message, 'error');
+      return false;
     }
   }
 
@@ -224,7 +228,10 @@ export default function ListPage({ listId, view, onViewChange }) {
       toast('当前列表缺少可用的工作流状态', 'error');
       return;
     }
-    await handleUpdateTask(task, { status_id: nextStatus.id });
+    const updated = await handleUpdateTask(task, { status_id: nextStatus.id });
+    if (updated && ['done', 'closed'].includes(nextStatus.type)) {
+      setCompletionNoteTask(task);
+    }
   }
 
   async function handleAddTask(statusId, name) {
@@ -266,6 +273,8 @@ export default function ListPage({ listId, view, onViewChange }) {
   }
 
   async function handleMoveTask(taskId, statusId, index) {
+    const movedTask = data?.tasks?.find((task) => task.id === taskId) || null;
+    const targetStatus = statuses.find((status) => status.id === statusId) || null;
     try {
       setData((current) => {
         if (!current) return current;
@@ -276,6 +285,14 @@ export default function ListPage({ listId, view, onViewChange }) {
       });
       await api.post(`/tasks/${taskId}/move`, { status_id: statusId, index });
       await refresh();
+      if (
+        movedTask &&
+        targetStatus &&
+        ['done', 'closed'].includes(targetStatus.type) &&
+        !['done', 'closed'].includes(movedTask.status?.type)
+      ) {
+        setCompletionNoteTask(movedTask);
+      }
     } catch (requestError) {
       toast(requestError.message, 'error');
       await load();
@@ -612,6 +629,17 @@ export default function ListPage({ listId, view, onViewChange }) {
           />
         )}
       </div>
+
+      <ProjectNoteModal
+        open={Boolean(completionNoteTask)}
+        listId={list.id}
+        tasks={data.tasks}
+        defaultTask={completionNoteTask}
+        onClose={() => setCompletionNoteTask(null)}
+        onSaved={() => {
+          setCompletionNoteTask(null);
+        }}
+      />
 
       <Modal
         open={renameOpen}

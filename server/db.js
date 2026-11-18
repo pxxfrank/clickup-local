@@ -175,6 +175,24 @@ CREATE TABLE IF NOT EXISTS project_note_tasks (
   FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS project_journal_events (
+  id TEXT PRIMARY KEY,
+  list_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  task_id TEXT,
+  task_name TEXT DEFAULT '',
+  title TEXT DEFAULT '',
+  body TEXT DEFAULT '',
+  user_name TEXT DEFAULT '',
+  user_color TEXT DEFAULT '',
+  important INTEGER NOT NULL DEFAULT 0,
+  occurred_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (kind, source_id),
+  FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS brainstorm_items (
   id TEXT PRIMARY KEY,
   list_id TEXT NOT NULL,
@@ -430,6 +448,8 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_brainstorm_list ON brainstorm_items(list_id);
 CREATE INDEX IF NOT EXISTS idx_project_notes_list ON project_notes(list_id);
 CREATE INDEX IF NOT EXISTS idx_project_note_tasks_note ON project_note_tasks(note_id);
+CREATE INDEX IF NOT EXISTS idx_journal_events_list ON project_journal_events(list_id);
+CREATE INDEX IF NOT EXISTS idx_journal_events_occurred ON project_journal_events(occurred_at);
 CREATE INDEX IF NOT EXISTS idx_milestones_list ON milestones(list_id);
 CREATE INDEX IF NOT EXISTS idx_participants_task ON task_participants(task_id);
 CREATE INDEX IF NOT EXISTS idx_dependencies_task ON task_dependencies(task_id);

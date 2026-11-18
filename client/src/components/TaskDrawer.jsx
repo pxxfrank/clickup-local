@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownUp,
   ArrowLeft,
+  BookOpen,
   CalendarDays,
   Check,
   CheckSquare,
@@ -36,6 +37,7 @@ import { formatDate, formatDateSmart, formatBytes, formatDateTime, parseDateValu
 import { renderMarkdownWithTasks } from '../lib/markdown.js';
 import DependencyGraphModal, { DependencyGraphCanvas } from './DependencyGraphModal.jsx';
 import MarkdownEditor from './MarkdownEditor.jsx';
+import ProjectNoteModal from './ProjectNoteModal.jsx';
 import {
   Avatar,
   ConfirmDialog,
@@ -85,6 +87,7 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
   const [dependencyTasks, setDependencyTasks] = useState([]);
   const [dependencyGraphOpen, setDependencyGraphOpen] = useState(false);
   const [dependencyFullscreen, setDependencyFullscreen] = useState(false);
+  const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [meetingOptions, setMeetingOptions] = useState([]);
   const [spacePeople, setSpacePeople] = useState([]);
   const [listContacts, setListContacts] = useState([]);
@@ -791,6 +794,11 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                       {detail.is_key_action ? '关键动作' : '设为关键动作'}
                     </button>
 
+                    <button type="button" className="quick-pill is-empty" onClick={() => setNoteModalOpen(true)}>
+                      <BookOpen size={14} />
+                      沉淀记录
+                    </button>
+
                     <Popover
                       width={260}
                       trigger={
@@ -1470,6 +1478,14 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
           ) : null}
         </aside>
       </div>
+
+      <ProjectNoteModal
+        open={noteModalOpen}
+        listId={detail?.list?.id}
+        tasks={dependencyTasks}
+        defaultTask={detail}
+        onClose={() => setNoteModalOpen(false)}
+      />
 
       <DependencyGraphModal
         open={dependencyGraphOpen}

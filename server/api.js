@@ -31,10 +31,85 @@ function todayStr(offset = 0) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function logActivity(workspaceId, taskId, userId, type, message) {
+const IMPORTANT_ACTIVITY_TYPES = new Set([
+  'task_created',
+  'task_deleted',
+  'automation',
+  'project_note',
+  'phase_created',
+  'milestone_created',
+]);
+
+function recordJournalEvent({
+  listId,
+  kind,
+  sourceId,
+  taskId = null,
+  taskName = '',
+  title = '',
+  body = '',
+  userName = '',
+  userColor = '',
+  important = false,
+  occurredAt,
+  createdAt,
+}) {
+  const now = new Date().toISOString();
   getDb()
-    .prepare('INSERT INTO activity (id, workspace_id, task_id, user_id, type, message, created_at) VALUES (?,?,?,?,?,?,?)')
-    .run(randomId(), workspaceId, taskId, userId, type, message, new Date().toISOString());
+    .prepare(
+      `INSERT INTO project_journal_events
+       (id, list_id, kind, source_id, task_id, task_name, title, body, user_name, user_color, important, occurred_at, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(kind, source_id) DO UPDATE SET
+         task_name = excluded.task_name, title = excluded.title, body = excluded.body,
+         user_name = excluded.user_name, user_color = excluded.user_color,
+         important = excluded.important, occurred_at = excluded.occurred_at`
+    )
+    .run(
+      randomId(),
+      listId,
+      kind,
+      sourceId,
+      taskId,
+      taskName,
+      title,
+      body,
+      userName,
+      userColor,
+      important ? 1 : 0,
+      occurredAt || now,
+      createdAt || now
+    );
+}
+
+function logActivity(workspaceId, taskId, userId, type, message) {
+  const db = getDb();
+  const id = randomId();
+  const now = new Date().toISOString();
+  db.prepare('INSERT INTO activity (id, workspace_id, task_id, user_id, type, message, created_at) VALUES (?,?,?,?,?,?,?)')
+    .run(id, workspaceId, taskId, userId, type, message, now);
+  if (!taskId) return;
+  const task = db
+    .prepare(
+      `SELECT t.id, t.name, t.list_id, u.name AS user_name, u.color AS user_color
+       FROM tasks t LEFT JOIN users u ON u.id = ? WHERE t.id = ?`
+    )
+    .get(userId, taskId);
+  if (!task) return;
+  if (type !== 'comment') {
+    recordJournalEvent({
+      listId: task.list_id,
+      kind: 'activity',
+      sourceId: id,
+      taskId: task.id,
+      taskName: task.name,
+      body: message,
+      userName: task.user_name,
+      userColor: task.user_color,
+      important: IMPORTANT_ACTIVITY_TYPES.has(type),
+      occurredAt: now,
+    });
+  }
 }
 
 function workspaceRole(workspaceId, userId) {
@@ -916,6 +991,29 @@ function accessibleMeeting(meetingId, userId) {
     .get(userId, meetingId);
 }
 
+function recordMeetingJournalEvent(meetingId) {
+  const db = getDb();
+  const meeting = db
+    .prepare(
+      `SELECT m.*, u.name AS user_name, u.color AS user_color
+       FROM meetings m LEFT JOIN users u ON u.id = m.created_by WHERE m.id = ?`
+    )
+    .get(meetingId);
+  if (!meeting) return;
+  recordJournalEvent({
+    listId: meeting.list_id,
+    kind: 'meeting',
+    sourceId: meeting.id,
+    title: meeting.title,
+    body: meeting.goals || '',
+    userName: meeting.user_name,
+    userColor: meeting.user_color,
+    important: true,
+    occurredAt: meeting.meeting_at || meeting.created_at,
+    createdAt: meeting.created_at,
+  });
+}
+
 function loadMeetingDetail(meetingId, userId) {
   const meeting = accessibleMeeting(meetingId, userId);
   if (!meeting) return null;
@@ -1540,13 +1638,79 @@ export function createApiRouter() {
       if (!noteTasks.has(link.note_id)) noteTasks.set(link.note_id, []);
       noteTasks.get(link.note_id).push({ id: link.id, name: link.name });
     }
+    const q = String(req.query.q || '').trim();
+    const from = req.query.from ? `${req.query.from}T00:00:00.000Z` : null;
+    const to = req.query.to ? `${req.query.to}T23:59:59.999Z` : null;
+
+    const commentsForBackfill = db
+      .prepare(
+        `SELECT c.id, c.body, c.created_at, t.id AS task_id, t.name AS task_name,
+                u.name AS user_name, u.color AS user_color
+         FROM comments c JOIN tasks t ON t.id = c.task_id
+         LEFT JOIN users u ON u.id = c.user_id WHERE t.list_id = ?`
+      )
+      .all(list.id);
+    for (const comment of commentsForBackfill) {
+      recordJournalEvent({
+        listId: list.id,
+        kind: 'progress',
+        sourceId: comment.id,
+        taskId: comment.task_id,
+        taskName: comment.task_name,
+        body: comment.body,
+        userName: comment.user_name,
+        userColor: comment.user_color,
+        occurredAt: comment.created_at,
+      });
+    }
+    const activityForBackfill = db
+      .prepare(
+        `SELECT a.id, a.type, a.message, a.created_at, t.id AS task_id, t.name AS task_name,
+                u.name AS user_name, u.color AS user_color
+         FROM activity a JOIN tasks t ON t.id = a.task_id
+         LEFT JOIN users u ON u.id = a.user_id WHERE t.list_id = ?`
+      )
+      .all(list.id);
+    for (const item of activityForBackfill) {
+      if (item.type === 'comment') continue;
+      recordJournalEvent({
+        listId: list.id,
+        kind: 'activity',
+        sourceId: item.id,
+        taskId: item.task_id,
+        taskName: item.task_name,
+        body: item.message,
+        userName: item.user_name,
+        userColor: item.user_color,
+        important: IMPORTANT_ACTIVITY_TYPES.has(item.type),
+        occurredAt: item.created_at,
+      });
+    }
+    for (const meeting of db.prepare('SELECT id FROM meetings WHERE list_id = ?').all(list.id)) {
+      recordMeetingJournalEvent(meeting.id);
+    }
+
+    const noteClauses = ['pn.list_id = ?'];
+    const noteArgs = [list.id];
+    if (q) {
+      noteClauses.push('(pn.title LIKE ? OR pn.body LIKE ?)');
+      noteArgs.push(`%${q}%`, `%${q}%`);
+    }
+    if (from) {
+      noteClauses.push('COALESCE(pn.occurred_at, pn.created_at) >= ?');
+      noteArgs.push(from);
+    }
+    if (to) {
+      noteClauses.push('COALESCE(pn.occurred_at, pn.created_at) <= ?');
+      noteArgs.push(to);
+    }
     const notes = db
       .prepare(
         `SELECT pn.*, u.name AS user_name, u.color AS user_color
          FROM project_notes pn LEFT JOIN users u ON u.id = pn.created_by
-         WHERE pn.list_id = ?`
+         WHERE ${noteClauses.join(' AND ')}`
       )
-      .all(list.id)
+      .all(...noteArgs)
       .map((note) => ({
         id: `note-${note.id}`,
         source_id: note.id,
@@ -1562,67 +1726,52 @@ export function createApiRouter() {
         updated_at: note.updated_at,
         created_at: note.created_at,
       }));
-    const progress = db
+
+    const eventClauses = ['list_id = ?'];
+    const eventArgs = [list.id];
+    if (q) {
+      eventClauses.push('(task_name LIKE ? OR title LIKE ? OR body LIKE ? OR user_name LIKE ?)');
+      eventArgs.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    }
+    if (from) {
+      eventClauses.push('occurred_at >= ?');
+      eventArgs.push(from);
+    }
+    if (to) {
+      eventClauses.push('occurred_at <= ?');
+      eventArgs.push(to);
+    }
+    const events = db
       .prepare(
-        `SELECT c.id, c.body, c.created_at, t.id AS task_id, t.name AS task_name,
-                u.name AS user_name, u.color AS user_color
-         FROM comments c JOIN tasks t ON t.id = c.task_id
-         LEFT JOIN users u ON u.id = c.user_id WHERE t.list_id = ?`
+        `SELECT * FROM project_journal_events WHERE ${eventClauses.join(' AND ')}
+         ORDER BY occurred_at DESC LIMIT 500`
       )
-      .all(list.id)
-      .map((comment) => ({
-        id: `progress-${comment.id}`,
-        source_id: comment.id,
-        kind: 'progress',
-        task_id: comment.task_id,
-        task_name: comment.task_name,
-        body: comment.body,
-        user_name: comment.user_name,
-        user_color: comment.user_color,
-        occurred_at: comment.created_at,
-        created_at: comment.created_at,
+      .all(...eventArgs)
+      .map((event) => ({
+        id: `${event.kind}-${event.source_id}`,
+        source_id: event.source_id,
+        kind: event.kind,
+        task_id: event.task_id,
+        task_name: event.task_name,
+        title: event.title,
+        body: event.body,
+        user_name: event.user_name,
+        user_color: event.user_color,
+        important: Boolean(event.important),
+        occurred_at: event.occurred_at,
+        created_at: event.created_at,
       }));
-    const activity = db
-      .prepare(
-        `SELECT a.id, a.type, a.message, a.created_at, t.id AS task_id, t.name AS task_name,
-                u.name AS user_name, u.color AS user_color
-         FROM activity a JOIN tasks t ON t.id = a.task_id
-         LEFT JOIN users u ON u.id = a.user_id WHERE t.list_id = ?`
-      )
-      .all(list.id)
-      .map((item) => ({
-        id: `activity-${item.id}`,
-        source_id: item.id,
-        kind: 'activity',
-        activity_type: item.type,
-        task_id: item.task_id,
-        task_name: item.task_name,
-        body: item.message,
-        user_name: item.user_name,
-        user_color: item.user_color,
-        occurred_at: item.created_at,
-        created_at: item.created_at,
-      }));
-    const meetings = db
-      .prepare('SELECT id, title, meeting_at, created_at FROM meetings WHERE list_id = ?')
-      .all(list.id)
-      .map((meeting) => ({
-        id: `meeting-${meeting.id}`,
-        source_id: meeting.id,
-        kind: 'meeting',
-        title: meeting.title,
-        occurred_at: meeting.meeting_at || meeting.created_at,
-        created_at: meeting.created_at,
-      }));
+
     const counts = {
       note: notes.length,
-      progress: progress.length,
-      activity: activity.length,
-      meeting: meetings.length,
+      progress: events.filter((event) => event.kind === 'progress').length,
+      activity: events.filter((event) => event.kind === 'activity').length,
+      meeting: events.filter((event) => event.kind === 'meeting').length,
     };
-    const items = [...notes, ...progress, ...activity, ...meetings]
+    const items = [...notes, ...events]
       .sort((a, b) => String(b.occurred_at).localeCompare(String(a.occurred_at)))
       .slice(0, 240);
+    res.json({ items, counts });
     res.json({ items, counts });
   });
 
@@ -2174,7 +2323,7 @@ export function createApiRouter() {
   router.delete('/tasks/:id', (req, res) => {
     const existing = accessibleTask(req.params.id, req.user.id);
     if (!existing) return res.status(404).json({ error: '任务不存在' });
-    logActivity(existing.workspace_id, null, req.user.id, 'task_deleted', `删除了任务「${existing.name}」`);
+    logActivity(existing.workspace_id, existing.id, req.user.id, 'task_deleted', `删除了任务「${existing.name}」`);
     db.prepare('DELETE FROM tasks WHERE id = ?').run(existing.id);
     res.json({ ok: true });
   });
@@ -2193,6 +2342,17 @@ export function createApiRouter() {
       text,
       now
     );
+    recordJournalEvent({
+      listId: existing.list_id,
+      kind: 'progress',
+      sourceId: id,
+      taskId: existing.id,
+      taskName: existing.name,
+      body: text,
+      userName: req.user.name,
+      userColor: req.user.color,
+      occurredAt: now,
+    });
     logActivity(existing.workspace_id, existing.id, req.user.id, 'comment', `在「${existing.name}」中记录了进展`);
     res.status(201).json({
       id,
@@ -2409,7 +2569,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.19.0',
+      version: '1.20.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -3209,6 +3369,7 @@ export function createApiRouter() {
     const meeting = accessibleMeeting(id, req.user.id);
     replaceMeetingTasks(meeting, body);
     replaceMeetingIssues(meeting, body);
+    recordMeetingJournalEvent(id);
     res.status(201).json(loadMeetingDetail(id, req.user.id));
   });
 
@@ -3245,6 +3406,7 @@ export function createApiRouter() {
     const current = accessibleMeeting(meeting.id, req.user.id);
     replaceMeetingTasks(current, body);
     replaceMeetingIssues(current, body);
+    recordMeetingJournalEvent(meeting.id);
     res.json(loadMeetingDetail(meeting.id, req.user.id));
   });
 

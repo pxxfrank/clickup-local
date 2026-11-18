@@ -7,6 +7,7 @@ import {
   Pencil,
   Pin,
   Plus,
+  Search,
   Trash2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
@@ -74,6 +75,10 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
   const [journal, setJournal] = useState({ items: [], counts: {} });
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [query, setQuery] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [hideRoutine, setHideRoutine] = useState(true);
   const [noteDraft, setNoteDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -81,7 +86,12 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
 
   async function loadJournal() {
     try {
-      const data = await api.get(`/lists/${list.id}/journal`);
+      const params = new URLSearchParams();
+      if (query.trim()) params.set('q', query.trim());
+      if (fromDate) params.set('from', fromDate);
+      if (toDate) params.set('to', toDate);
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      const data = await api.get(`/lists/${list.id}/journal${suffix}`);
       setJournal(data);
     } catch (error) {
       toast(error.message, 'error');
@@ -92,13 +102,17 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
 
   useEffect(() => {
     setLoading(true);
-    loadJournal();
-  }, [list.id, dataVersion]);
+    const timer = setTimeout(loadJournal, query ? 240 : 0);
+    return () => clearTimeout(timer);
+  }, [list.id, dataVersion, query, fromDate, toDate]);
 
-  const filtered = useMemo(
-    () => (filter === 'all' ? journal.items : journal.items.filter((item) => item.kind === filter)),
-    [journal.items, filter]
-  );
+  const filtered = useMemo(() => {
+    let items = filter === 'all' ? journal.items : journal.items.filter((item) => item.kind === filter);
+    if (hideRoutine) {
+      items = items.filter((item) => item.kind !== 'activity' || item.important);
+    }
+    return items;
+  }, [journal.items, filter, hideRoutine]);
   const pinnedNotes = useMemo(
     () => filtered.filter((item) => item.kind === 'note' && item.pinned),
     [filtered]
@@ -243,6 +257,25 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
             <Plus size={14} /> 写项目记录
           </button>
         </div>
+      </div>
+
+      <div className="journal-toolbar">
+        <label className="journal-search">
+          <Search size={13} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索记录、任务或成员…" />
+        </label>
+        <label className="journal-date-filter">
+          <span>从</span>
+          <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+        </label>
+        <label className="journal-date-filter">
+          <span>到</span>
+          <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+        </label>
+        <label className="journal-routine-toggle">
+          <input type="checkbox" checked={hideRoutine} onChange={(event) => setHideRoutine(event.target.checked)} />
+          隐藏普通动态
+        </label>
       </div>
 
       <div className="journal-filters">
