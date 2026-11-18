@@ -159,14 +159,16 @@ export default function ProjectOverview({
   );
 
   function phaseForMilestone(milestone) {
-    return sortedPhases.find(
-      (phase) => phase.start_date <= milestone.due_date && phase.end_date >= milestone.due_date
-    );
+    return phaseForDate(milestone.due_date);
   }
 
   function phaseForDate(value) {
     if (!value) return null;
-    return sortedPhases.find((phase) => phase.start_date <= value && phase.end_date >= value) || null;
+    let active = null;
+    for (const phase of sortedPhases) {
+      if (phase.start_date <= value && phase.end_date >= value) active = phase;
+    }
+    return active;
   }
 
   const verticalTimeline = useMemo(() => {
@@ -192,13 +194,10 @@ export default function ProjectOverview({
       }
     }
     const priorityRank = { 1: 0, 2: 1, 3: 2, 4: 3, 0: 4 };
-    let previousPhaseId = null;
     const rows = [...groups.entries()]
       .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
       .map(([date, group]) => {
         const phase = phaseForDate(date);
-        const showPhaseLabel = Boolean(phase && phase.id !== previousPhaseId);
-        if (phase) previousPhaseId = phase.id;
         group.tasks.sort((a, b) => {
           const byPriority = (priorityRank[a.priority] ?? 9) - (priorityRank[b.priority] ?? 9);
           if (byPriority !== 0) return byPriority;
@@ -210,12 +209,29 @@ export default function ProjectOverview({
           milestones: group.milestones,
           tasks: group.tasks,
           phase,
-          showPhaseLabel,
           isToday: date === todayKey(),
         };
       });
     if (!rows.length) return null;
-    return { rows };
+
+    const sections = [];
+    for (const row of rows) {
+      const phaseId = row.phase?.id || '__unassigned__';
+      const current = sections[sections.length - 1];
+      if (current && current.phaseId === phaseId) {
+        current.rows.push(row);
+      } else {
+        sections.push({
+          phaseId,
+          phase: row.phase,
+          rows: [row],
+          startDate: row.date,
+          endDate: row.date,
+        });
+      }
+      sections[sections.length - 1].endDate = row.date;
+    }
+    return { sections };
   }, [tasks, sortedMilestones, sortedPhases]);
 
   async function savePurpose() {
@@ -490,7 +506,7 @@ export default function ProjectOverview({
         <div className="overview-card-head">
           <div>
             <h3>项目时间轴</h3>
-            <p>纵向按阶段着色；左侧里程碑，右侧已安排时间的任务</p>
+            <p>按阶段底色分区；左侧里程碑，右侧已安排时间的任务</p>
           </div>
           <div className="overview-timeline-actions">
             <button type="button" className="section-action" onClick={() => openPhase()}>
@@ -504,121 +520,133 @@ export default function ProjectOverview({
 
         {verticalTimeline ? (
           <>
-            {sortedPhases.length > 0 && (
-              <div className="vtimeline-legend">
-                {sortedPhases.map((phase) => (
-                  <span key={phase.id} title={`${formatDateSmart(phase.start_date)} — ${formatDateSmart(phase.end_date)}`}>
-                    <i style={{ background: phase.color }} />
-                    {phase.name}
-                    <em>{formatDateSmart(phase.start_date)} — {formatDateSmart(phase.end_date)}</em>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="vtimeline-columns">
-              <span>里程碑</span>
-              <span>时间轴</span>
-              <span>已安排任务</span>
-            </div>
-            <div className="vtimeline-scroll">
-              <div className="vtimeline-body">
-                {verticalTimeline.rows.map((row) => (
-                  <div className={`vtimeline-row ${row.isToday ? 'is-today' : ''}`} key={row.date}>
-                    <div className="vtimeline-left">
-                      {row.milestones.map((milestone) => {
-                        const days = differenceInDays(milestone.due_date);
-                        const overdue = !milestone.completed && days < 0;
-                        const soon = !milestone.completed && days >= 0 && days <= 7;
-                        const milestoneKeyActions = keyActionsForMilestone(milestone);
-                        return (
-                          <article
-                            className={`vtimeline-ms ${milestone.completed ? 'is-completed' : ''} ${overdue ? 'is-overdue' : ''}`}
-                            key={milestone.id}
-                            style={{ borderLeftColor: row.phase?.color || milestone.color || list.color }}
-                          >
-                            <div className="vtimeline-ms-top">
-                              <button
-                                type="button"
-                                className={`milestone-check ${milestone.completed ? 'is-checked' : ''}`}
-                                onClick={() => toggleMilestone(milestone)}
-                                title={milestone.completed ? '标记为未完成' : '标记为完成'}
-                              >
-                                {milestone.completed ? <Check size={11} /> : null}
-                              </button>
-                              <strong>{milestone.name}</strong>
-                              <div className="vtimeline-ms-actions">
-                                <button type="button" onClick={() => openMilestone(milestone)} title="编辑里程碑"><Pencil size={12} /></button>
-                                <button type="button" className="is-danger" onClick={() => setDeleteTarget(milestone)} title="删除里程碑"><Trash2 size={12} /></button>
-                              </div>
-                            </div>
-                            <div className="vtimeline-ms-meta">
-                              {milestone.completed ? (
-                                <span className="milestone-badge is-done">已完成</span>
-                              ) : overdue ? (
-                                <span className="milestone-badge is-overdue">逾期 {Math.abs(days)} 天</span>
-                              ) : soon ? (
-                                <span className="milestone-badge is-soon">{days === 0 ? '今天' : `${days} 天后`}</span>
-                              ) : (
-                                <span className="milestone-badge">{days} 天后</span>
-                              )}
-                              <span>{formatDateSmart(milestone.due_date)}</span>
-                              {row.phase && <em style={{ color: row.phase.color }}>{row.phase.name}</em>}
-                            </div>
-                            {milestone.description && <p className="vtimeline-ms-desc">{milestone.description}</p>}
-                            {milestoneKeyActions.length > 0 && (
-                              <p className="vtimeline-ms-keyactions" title={milestoneKeyActions.map((task) => task.name).join('、')}>
-                                <Star size={9} />
-                                {milestoneKeyActions.slice(0, 2).map((task) => task.name).join('、')}
-                                {milestoneKeyActions.length > 2 ? ` +${milestoneKeyActions.length - 2}` : ''}
-                              </p>
-                            )}
-                          </article>
-                        );
-                      })}
-                    </div>
-
-                    <div className="vtimeline-center" style={{ '--vt-phase': row.phase?.color || '#d9d8e6' }}>
-                      <span className="vtimeline-axis" />
-                      <span className="vtimeline-node" />
-                      <span className="vtimeline-date">
-                        <strong>{format(parseDateValue(row.date), 'M月d日')}</strong>
-                        <span>{format(parseDateValue(row.date), 'EEE', { locale: zhCN })}</span>
+          <div className="vtimeline-columns">
+            <span>阶段</span>
+            <span>里程碑</span>
+            <span>时间轴</span>
+            <span>已安排任务</span>
+          </div>
+          <div className="vtimeline-scroll">
+            <div className="vtimeline-body">
+              {verticalTimeline.sections.map((section) => {
+                const color = section.phase?.color || '#b9b7c7';
+                return (
+                  <div
+                    className="vtimeline-phase-section"
+                    key={`${section.phaseId}-${section.startDate}`}
+                    style={{
+                      borderLeftColor: color,
+                      '--vt-phase': color,
+                      '--vt-phase-soft': `${color}10`,
+                      '--vt-phase-rail': `${color}24`,
+                    }}
+                  >
+                    <div className="vtimeline-phase-rail">
+                      <span className="vtimeline-phase-swatch" style={{ background: color }} />
+                      <strong>{section.phase?.name || '未分阶段'}</strong>
+                      <span>
+                        {section.phase
+                          ? `${formatDateSmart(section.phase.start_date)} — ${formatDateSmart(section.phase.end_date)}`
+                          : '无阶段覆盖'}
                       </span>
-                      {row.showPhaseLabel && row.phase && (
-                        <span className="vtimeline-phase-label" style={{ color: row.phase.color }}>
-                          {row.phase.name}
-                        </span>
-                      )}
+                      <em>{section.phase ? `${daysInclusive(section.phase.start_date, section.phase.end_date)} 天` : '按日期排列'}</em>
                     </div>
+                    <div className="vtimeline-phase-rows">
+                      {section.rows.map((row) => (
+                        <div className={`vtimeline-row ${row.isToday ? 'is-today' : ''}`} key={row.date}>
+                          <div className="vtimeline-left">
+                            {row.milestones.map((milestone) => {
+                              const days = differenceInDays(milestone.due_date);
+                              const overdue = !milestone.completed && days < 0;
+                              const soon = !milestone.completed && days >= 0 && days <= 7;
+                              const milestoneKeyActions = keyActionsForMilestone(milestone);
+                              return (
+                                <article
+                                  className={`vtimeline-ms ${milestone.completed ? 'is-completed' : ''} ${overdue ? 'is-overdue' : ''}`}
+                                  key={milestone.id}
+                                  style={{ borderLeftColor: color }}
+                                >
+                                  <div className="vtimeline-ms-top">
+                                    <button
+                                      type="button"
+                                      className={`milestone-check ${milestone.completed ? 'is-checked' : ''}`}
+                                      onClick={() => toggleMilestone(milestone)}
+                                      title={milestone.completed ? '标记为未完成' : '标记为完成'}
+                                    >
+                                      {milestone.completed ? <Check size={11} /> : null}
+                                    </button>
+                                    <strong>{milestone.name}</strong>
+                                    <div className="vtimeline-ms-actions">
+                                      <button type="button" onClick={() => openMilestone(milestone)} title="编辑里程碑"><Pencil size={12} /></button>
+                                      <button type="button" className="is-danger" onClick={() => setDeleteTarget(milestone)} title="删除里程碑"><Trash2 size={12} /></button>
+                                    </div>
+                                  </div>
+                                  <div className="vtimeline-ms-meta">
+                                    {milestone.completed ? (
+                                      <span className="milestone-badge is-done">已完成</span>
+                                    ) : overdue ? (
+                                      <span className="milestone-badge is-overdue">逾期 {Math.abs(days)} 天</span>
+                                    ) : soon ? (
+                                      <span className="milestone-badge is-soon">{days === 0 ? '今天' : `${days} 天后`}</span>
+                                    ) : (
+                                      <span className="milestone-badge">{days} 天后</span>
+                                    )}
+                                    <span>{formatDateSmart(milestone.due_date)}</span>
+                                  </div>
+                                  {milestone.description && <p className="vtimeline-ms-desc">{milestone.description}</p>}
+                                  {milestoneKeyActions.length > 0 && (
+                                    <p className="vtimeline-ms-keyactions" title={milestoneKeyActions.map((task) => task.name).join('、')}>
+                                      <Star size={9} />
+                                      {milestoneKeyActions.slice(0, 2).map((task) => task.name).join('、')}
+                                      {milestoneKeyActions.length > 2 ? ` +${milestoneKeyActions.length - 2}` : ''}
+                                    </p>
+                                  )}
+                                </article>
+                              );
+                            })}
+                          </div>
 
-                    <div className="vtimeline-right">
-                      {row.tasks.map((task) => {
-                        const schedule = task.start_date && task.due_date && task.start_date !== task.due_date
-                          ? `${formatDateSmart(task.start_date)} → ${formatDateSmart(task.due_date)}`
-                          : formatDateSmart(task.due_date || task.start_date);
-                        return (
-                          <button
-                            type="button"
-                            className="vtimeline-task"
-                            key={task.id}
-                            onClick={() => onOpenTask?.(task.id)}
-                            title={task.name}
-                          >
-                            <span className="status-dot" style={{ background: task.status?.color || '#87909e' }} />
-                            <span className="vtimeline-task-main">
-                              <strong>{task.name}</strong>
-                              <span>{schedule}</span>
+                          <div className="vtimeline-center" style={{ '--vt-phase': color }}>
+                            <span className="vtimeline-axis" />
+                            <span className="vtimeline-node" />
+                            <span className="vtimeline-date">
+                              <strong>{format(parseDateValue(row.date), 'M月d日')}</strong>
+                              <span>{format(parseDateValue(row.date), 'EEE', { locale: zhCN })}</span>
                             </span>
-                            {task.is_key_action ? <Star size={11} className="vtimeline-task-star" /> : null}
-                            {task.assignee ? <Avatar user={task.assignee} size={18} /> : null}
-                          </button>
-                        );
-                      })}
+                          </div>
+
+                          <div className="vtimeline-right">
+                            {row.tasks.map((task) => {
+                              const schedule = task.start_date && task.due_date && task.start_date !== task.due_date
+                                ? `${formatDateSmart(task.start_date)} → ${formatDateSmart(task.due_date)}`
+                                : formatDateSmart(task.due_date || task.start_date);
+                              return (
+                                <button
+                                  type="button"
+                                  className="vtimeline-task"
+                                  key={task.id}
+                                  onClick={() => onOpenTask?.(task.id)}
+                                  title={task.name}
+                                >
+                                  <span className="status-dot" style={{ background: task.status?.color || '#87909e' }} />
+                                  <span className="vtimeline-task-main">
+                                    <strong>{task.name}</strong>
+                                    <span>{schedule}</span>
+                                  </span>
+                                  {task.is_key_action ? <Star size={11} className="vtimeline-task-star" /> : null}
+                                  {task.assignee ? <Avatar user={task.assignee} size={18} /> : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
+          </div>
           </>
         ) : (
           <div className="milestone-empty milestone-empty-vertical">
