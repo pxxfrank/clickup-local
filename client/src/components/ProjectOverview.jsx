@@ -18,6 +18,8 @@ import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { addDays, addMonths, dueTone, format, formatDateSmart, parseDateValue, startOfMonth, todayKey, zhCN } from '../lib/date.js';
 import { Avatar, ConfirmDialog, Modal, ProgressBar, Spinner } from './ui.jsx';
+import Select from './Select.jsx';
+import DateField from './DateField.jsx';
 
 const PHASE_COLORS = ['#7B68EE', '#4A9EFF', '#2EA44F', '#F59E0B', '#F06A6A', '#EC4899'];
 const TIMELINE_CARD_WIDTH = 168;
@@ -822,24 +824,24 @@ export default function ProjectOverview({
             <div className="form-grid-2">
               <label className="field">
                 <span className="field-label">负责人</span>
-                <select
+                <Select
                   className="input"
                   value={keyActionForm.assignee_id}
-                  onChange={(event) => setKeyActionForm({ ...keyActionForm, assignee_id: event.target.value })}
-                >
-                  <option value="">暂不指派</option>
-                  {members.map((member) => (
-                    <option key={member.id} value={member.id}>{member.name}</option>
-                  ))}
-                </select>
+                  onChange={(assignee_id) => setKeyActionForm({ ...keyActionForm, assignee_id })}
+                  options={[
+                    { value: '', label: '暂不指派' },
+                    ...members.map((member) => ({ value: member.id, label: member.name })),
+                  ]}
+                />
               </label>
               <label className="field">
                 <span className="field-label">截止日期</span>
-                <input
+                <DateField
                   className="input"
-                  type="date"
                   value={keyActionForm.due_date}
-                  onChange={(event) => setKeyActionForm({ ...keyActionForm, due_date: event.target.value })}
+                  onChange={(due_date) => setKeyActionForm({ ...keyActionForm, due_date })}
+                  placeholder="选择截止日期"
+                  ariaLabel="截止日期"
                 />
               </label>
             </div>
@@ -889,22 +891,22 @@ export default function ProjectOverview({
             <div className="form-grid-2">
               <label className="field">
                 <span className="field-label">开始日期</span>
-                <input
+                <DateField
                   className="input"
-                  type="date"
                   value={phaseForm.start_date}
-                  onChange={(event) => setPhaseForm({ ...phaseForm, start_date: event.target.value })}
-                  required
+                  onChange={(start_date) => setPhaseForm({ ...phaseForm, start_date })}
+                  placeholder="选择开始日期"
+                  ariaLabel="开始日期"
                 />
               </label>
               <label className="field">
                 <span className="field-label">结束日期</span>
-                <input
+                <DateField
                   className="input"
-                  type="date"
                   value={phaseForm.end_date}
-                  onChange={(event) => setPhaseForm({ ...phaseForm, end_date: event.target.value })}
-                  required
+                  onChange={(end_date) => setPhaseForm({ ...phaseForm, end_date })}
+                  placeholder="选择结束日期"
+                  ariaLabel="结束日期"
                 />
               </label>
             </div>
@@ -942,7 +944,7 @@ export default function ProjectOverview({
         footer={
           <>
             <button type="button" className="btn btn-ghost" onClick={() => setMilestoneForm(null)}>取消</button>
-            <button type="submit" form="milestone-form" className="btn btn-primary" disabled={savingMilestone || !milestoneForm?.name?.trim()}>
+            <button type="submit" form="milestone-form" className="btn btn-primary" disabled={savingMilestone || !milestoneForm?.name?.trim() || !milestoneForm?.due_date}>
               {savingMilestone ? <Spinner size={15} /> : <Flag size={15} />} 保存里程碑
             </button>
           </>
@@ -962,12 +964,12 @@ export default function ProjectOverview({
             </label>
             <label className="field">
               <span className="field-label">目标日期</span>
-              <input
+              <DateField
                 className="input"
-                type="date"
                 value={milestoneForm.due_date}
-                onChange={(event) => setMilestoneForm({ ...milestoneForm, due_date: event.target.value })}
-                required
+                onChange={(due_date) => setMilestoneForm({ ...milestoneForm, due_date })}
+                placeholder="选择目标日期"
+                ariaLabel="目标日期"
               />
             </label>
             <label className="field">

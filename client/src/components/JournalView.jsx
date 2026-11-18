@@ -16,6 +16,8 @@ import { format, formatDateTime, parseDateValue, zhCN } from '../lib/date.js';
 import { renderMarkdownWithTasks, taskReferenceText } from '../lib/markdown.js';
 import { Avatar, ConfirmDialog, EmptyState, Modal, Spinner } from './ui.jsx';
 import MarkdownEditor from './MarkdownEditor.jsx';
+import Select from './Select.jsx';
+import DateField from './DateField.jsx';
 
 const FILTERS = [
   { value: 'all', label: '全部' },
@@ -266,11 +268,11 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
         </label>
         <label className="journal-date-filter">
           <span>从</span>
-          <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+          <DateField className="journal-date-input" value={fromDate} onChange={setFromDate} placeholder="开始日期" clearable={Boolean(fromDate)} />
         </label>
         <label className="journal-date-filter">
           <span>到</span>
-          <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+          <DateField className="journal-date-input" value={toDate} onChange={setToDate} placeholder="结束日期" clearable={Boolean(toDate)} />
         </label>
         <label className="journal-routine-toggle">
           <input type="checkbox" checked={hideRoutine} onChange={(event) => setHideRoutine(event.target.checked)} />
@@ -394,23 +396,25 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
               </label>
               <label className="field">
                 <span className="field-label">记录类型</span>
-                <select
+                <Select
                   className="input"
                   value={noteDraft.kind}
-                  onChange={(event) => setNoteDraft({ ...noteDraft, kind: event.target.value })}
-                >
-                  {NOTE_KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                </select>
+                  onChange={(kind) => setNoteDraft({ ...noteDraft, kind })}
+                  options={NOTE_KINDS}
+                  menuWidth={220}
+                />
               </label>
             </div>
             <div className="journal-note-meta-row">
               <label className="field">
                 <span className="field-label">发生时间</span>
-                <input
+                <DateField
                   className="input"
                   type="datetime-local"
                   value={noteDraft.occurred_at}
-                  onChange={(event) => setNoteDraft({ ...noteDraft, occurred_at: event.target.value })}
+                  onChange={(occurred_at) => setNoteDraft({ ...noteDraft, occurred_at })}
+                  placeholder="选择发生时间"
+                  ariaLabel="发生时间"
                 />
               </label>
               <label className="journal-pin-toggle">

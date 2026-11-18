@@ -23,6 +23,7 @@ import {
   ProgressBar,
   TagChip,
 } from './ui.jsx';
+import DateField from './DateField.jsx';
 import { formatDate } from '../lib/date.js';
 import { addDays, format } from 'date-fns';
 
@@ -97,23 +98,25 @@ function DueControl({ task, onUpdate }) {
           </div>
           <label className="date-field">
             <span>开始日期</span>
-            <input
-              type="date"
+            <DateField
+              className="date-panel-input"
               value={start}
-              onChange={(event) => {
-                setStart(event.target.value);
-                onUpdate(task, { start_date: event.target.value || null });
+              clearable={false}
+              onChange={(value) => {
+                setStart(value);
+                onUpdate(task, { start_date: value || null });
               }}
             />
           </label>
           <label className="date-field">
             <span>截止日期</span>
-            <input
-              type="date"
+            <DateField
+              className="date-panel-input"
               value={due}
-              onChange={(event) => {
-                setDue(event.target.value);
-                onUpdate(task, { due_date: event.target.value || null });
+              clearable={false}
+              onChange={(value) => {
+                setDue(value);
+                onUpdate(task, { due_date: value || null });
               }}
             />
           </label>

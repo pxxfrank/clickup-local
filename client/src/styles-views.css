@@ -177,6 +177,15 @@
   margin-left: 0;
 }
 
+@media (max-width: 1180px) {
+  .view-bar-actions {
+    flex: 1 0 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+    padding-top: 2px;
+  }
+}
+
 .view-tabs {
   display: flex;
   align-items: center;

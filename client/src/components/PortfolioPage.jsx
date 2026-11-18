@@ -12,6 +12,7 @@ import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { formatDateSmart } from '../lib/date.js';
 import { ProgressBar, Spinner } from './ui.jsx';
+import Select from './Select.jsx';
 
 const HEALTH_META = {
   risk: { label: '有风险', className: 'is-risk' },
@@ -114,12 +115,16 @@ export default function PortfolioPage() {
           />
         </label>
         <div className="portfolio-filters">
-          <select className="mini-select" value={spaceId} onChange={(event) => setSpaceId(event.target.value)}>
-            <option value="all">全部空间</option>
-            {spaces.map((space) => (
-              <option key={space.id} value={space.id}>{space.name}</option>
-            ))}
-          </select>
+          <Select
+            className="mini-select"
+            value={spaceId}
+            onChange={setSpaceId}
+            menuWidth={240}
+            options={[
+              { value: 'all', label: '全部空间' },
+              ...spaces.map((space) => ({ value: space.id, label: space.name })),
+            ]}
+          />
           {[
             { id: 'all', label: '全部' },
             { id: 'risk', label: '有风险' },

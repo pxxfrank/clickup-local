@@ -1062,6 +1062,22 @@
   color: var(--muted);
 }
 
+.date-field .ui-date.date-panel-input {
+  width: 145px;
+  height: 29px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: none;
+  font-size: 11px;
+  gap: 3px;
+}
+
+.date-field .date-panel-input .ui-date-icon {
+  display: none;
+}
+
 .date-field input {
   width: 145px;
   height: 29px;
@@ -1501,8 +1517,25 @@
   padding-right: 10px;
 }
 
-.create-prop select {
-  text-overflow: ellipsis;
+.create-prop .ui-select {
+  height: 31px;
+  max-width: 175px;
+  padding: 0 17px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 10.5px;
+}
+
+.create-prop .ui-select:hover {
+  background: transparent;
+}
+
+.create-prop .ui-select .ui-select-chevron {
+  position: absolute;
+  right: 6px;
+  pointer-events: none;
 }
 
 .create-prop > svg {
@@ -1512,9 +1545,25 @@
   pointer-events: none;
 }
 
-.create-prop input[type="date"] {
-  width: 110px;
-  padding-right: 0;
+.create-prop .ui-date {
+  width: 118px;
+  height: 31px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 10.5px;
+  gap: 3px;
+}
+
+.create-prop .ui-date-icon {
+  display: none;
+}
+
+.create-prop .ui-date-clear {
+  width: 16px;
+  height: 16px;
 }
 
 .create-more-toggle {

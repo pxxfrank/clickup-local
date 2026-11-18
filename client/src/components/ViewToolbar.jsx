@@ -1,6 +1,7 @@
 import { ArrowDownWideNarrow, ArrowUpDown, Check, EyeOff, Filter, Layers, ListFilter, Search, X } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { Avatar, MenuDivider, MenuItem, Popover } from './ui.jsx';
+import Select from './Select.jsx';
 
 export const SORT_OPTIONS = [
   { value: 'manual', label: '手动排序' },
@@ -113,15 +114,13 @@ export default function ViewToolbar({ filters, setFilters, sort, setSort, group,
           </label>
           <label className="filter-field">
             <span>优先级</span>
-            <select
+            <Select
               className="mini-select"
               value={filters.priority}
-              onChange={(event) => setFilters({ ...filters, priority: event.target.value })}
-            >
-              {PRIORITY_FILTERS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+              onChange={(priority) => setFilters({ ...filters, priority })}
+              options={PRIORITY_FILTERS}
+              menuWidth={180}
+            />
           </label>
           <label className="filter-field">
             <span>状态</span>

@@ -38,6 +38,8 @@ import { renderMarkdownWithTasks } from '../lib/markdown.js';
 import DependencyGraphModal, { DependencyGraphCanvas } from './DependencyGraphModal.jsx';
 import MarkdownEditor from './MarkdownEditor.jsx';
 import ProjectNoteModal from './ProjectNoteModal.jsx';
+import Select from './Select.jsx';
+import DateField from './DateField.jsx';
 import {
   Avatar,
   ConfirmDialog,
@@ -841,14 +843,15 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                           <MenuDivider />
                           <label className="date-field recurrence-until">
                             <span>结束日期（可选）</span>
-                            <input
-                              type="date"
+                            <DateField
+                              className="date-panel-input"
                               value={detail.recurrence_until || ''}
-                              onChange={(event) =>
+                              clearable={false}
+                              onChange={(value) =>
                                 patchTask({
                                   recurrence_frequency: detail.recurrence_frequency,
                                   recurrence_interval: detail.recurrence_interval || 1,
-                                  recurrence_until: event.target.value || null,
+                                  recurrence_until: value || null,
                                 })
                               }
                             />
@@ -881,18 +884,20 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                           </div>
                           <label className="date-field">
                             <span>开始日期</span>
-                            <input
-                              type="date"
+                            <DateField
+                              className="date-panel-input"
                               value={detail.start_date || ''}
-                              onChange={(event) => patchTask({ start_date: event.target.value || null })}
+                              clearable={false}
+                              onChange={(value) => patchTask({ start_date: value || null })}
                             />
                           </label>
                           <label className="date-field">
                             <span>截止日期</span>
-                            <input
-                              type="date"
+                            <DateField
+                              className="date-panel-input"
                               value={detail.due_date || ''}
-                              onChange={(event) => patchTask({ due_date: event.target.value || null })}
+                              clearable={false}
+                              onChange={(value) => patchTask({ due_date: value || null })}
                             />
                           </label>
                           <MenuDivider />
@@ -1130,22 +1135,20 @@ export default function TaskDrawer({ taskId, onClose, onOpenTask }) {
                               <label className="drawer-field" key={field.id}>
                                 <span className="drawer-field-label">{field.name}</span>
                                 {field.type === 'select' ? (
-                                  <select
+                                  <Select
                                     className="mini-select field-select"
                                     value={value}
-                                    onChange={(event) => patchTask({ fields: { [field.id]: event.target.value } })}
-                                  >
-                                    <option value="">未设置</option>
-                                    {field.options.map((option) => (
-                                      <option key={option} value={option}>{option}</option>
-                                    ))}
-                                  </select>
+                                    onChange={(nextValue) => patchTask({ fields: { [field.id]: nextValue } })}
+                                    options={[
+                                      { value: '', label: '未设置' },
+                                      ...field.options.map((option) => ({ value: option, label: option })),
+                                    ]}
+                                  />
                                 ) : field.type === 'date' ? (
-                                  <input
-                                    type="date"
+                                  <DateField
                                     className="field-input"
                                     value={value}
-                                    onChange={(event) => patchTask({ fields: { [field.id]: event.target.value } })}
+                                    onChange={(nextValue) => patchTask({ fields: { [field.id]: nextValue } })}
                                   />
                                 ) : field.type === 'checkbox' ? (
                                   <input

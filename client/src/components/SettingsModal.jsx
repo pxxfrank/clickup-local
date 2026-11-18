@@ -27,6 +27,7 @@ import {
   Modal,
   Spinner,
 } from './ui.jsx';
+import Select from './Select.jsx';
 
 const AVATAR_COLORS = ['#7B68EE', '#4A9EFF', '#26C6DA', '#2EA44F', '#F59E0B', '#FF8A65', '#E5484D', '#A25DDC'];
 const TAG_COLORS = ['#61bd8f', '#5b8def', '#f78fb3', '#e5484d', '#f2a93b', '#9b7ede', '#8898aa', '#26c6da'];
@@ -565,10 +566,13 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
                         <span>{member.email}{member.title ? ` · ${member.title}` : ''}</span>
                       </div>
                       {isOwner && member.role !== 'owner' ? (
-                        <select className="member-role-select" value={member.role} onChange={(event) => changeRole(member, event.target.value)}>
-                          <option value="admin">管理员</option>
-                          <option value="member">成员</option>
-                        </select>
+                        <Select
+                          className="mini-select member-role-select"
+                          value={member.role}
+                          onChange={(role) => changeRole(member, role)}
+                          menuWidth={160}
+                          options={[{ value: 'admin', label: '管理员' }, { value: 'member', label: '成员' }]}
+                        />
                       ) : (
                         <span className={`member-role member-role-${member.role}`}>{ROLE_LABELS[member.role]}</span>
                       )}
@@ -638,10 +642,13 @@ export default function SettingsModal({ open, initialTab = 'profile', onClose })
                         </label>
                       </div>
                       <div className="invite-form-foot">
-                        <select className="mini-select" value={invite.role} onChange={(event) => setInvite({ ...invite, role: event.target.value })}>
-                          <option value="member">成员</option>
-                          <option value="admin">管理员</option>
-                        </select>
+                        <Select
+                          className="mini-select"
+                          value={invite.role}
+                          onChange={(role) => setInvite({ ...invite, role })}
+                          menuWidth={160}
+                          options={[{ value: 'member', label: '成员' }, { value: 'admin', label: '管理员' }]}
+                        />
                         <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
                           {busy ? <Spinner size={14} /> : <UserPlus size={14} />} 发送邀请
                         </button>

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronDown, Flag, List as ListIcon, Plus, UserRound } from 'lucide-react';
+import { CalendarDays, Flag, List as ListIcon, Plus } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { flattenLists } from '../lib/tree.js';
 import { Avatar, Modal, Spinner } from './ui.jsx';
 import MarkdownEditor from './MarkdownEditor.jsx';
+import Select from './Select.jsx';
+import DateField from './DateField.jsx';
 
 export default function CreateTaskModal({ defaults, onClose }) {
   const { bootstrap, refresh, navigate, openTask, toast, user } = useApp();
@@ -63,7 +65,6 @@ export default function CreateTaskModal({ defaults, onClose }) {
   }, [open, listId, defaults?.status_id]);
 
   const selectedList = lists.find((entry) => entry.list.id === listId);
-  const selectedStatus = statuses.find((status) => status.id === statusId);
   const assigneeOptions = useMemo(() => {
     const result = members.filter((person) => !person.is_external);
     for (const contact of contacts) {
@@ -111,7 +112,7 @@ export default function CreateTaskModal({ defaults, onClose }) {
       width={620}
       footer={
         <>
-          <span className="create-task-hint">按 <kbd>⌘</kbd> + <kbd>Enter</kbd> 快速创建</span>
+          <span className="create-task-hint">按 <kbd>Ctrl</kbd> + <kbd>Enter</kbd> 快速创建</span>
           <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
           <button type="button" className="btn btn-primary" onClick={submit} disabled={busy || !name.trim() || !listId}>
             {busy ? <Spinner size={15} /> : <Plus size={15} />} 创建任务
@@ -140,49 +141,73 @@ export default function CreateTaskModal({ defaults, onClose }) {
             <div className="create-props">
               <label className="create-prop">
                 <span><ListIcon size={14} /> 列表</span>
-                <select value={listId} onChange={(event) => setListId(event.target.value)}>
-                  {lists.map(({ list, space, folder }) => (
-                    <option key={list.id} value={list.id}>
-                      {space.name}{folder ? ` / ${folder.name}` : ''} / {list.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={13} />
+                <Select
+                  className="create-select"
+                  value={listId}
+                  onChange={setListId}
+                  menuWidth={340}
+                  options={lists.map(({ list, space, folder }) => ({
+                    value: list.id,
+                    label: `${space.name}${folder ? ` / ${folder.name}` : ''} / ${list.name}`,
+                  }))}
+                />
               </label>
               <label className="create-prop">
-                <span><span className="status-dot" style={{ background: selectedStatus?.color || '#87909e' }} /> 状态</span>
-                <select value={statusId} onChange={(event) => setStatusId(event.target.value)}>
-                  {statuses.map((status) => (
-                    <option key={status.id} value={status.id}>{status.name}</option>
-                  ))}
-                  {!statuses.length && <option value="">加载中…</option>}
-                </select>
-                <ChevronDown size={13} />
+                <span>状态</span>
+                <Select
+                  className="create-select"
+                  value={statusId}
+                  onChange={setStatusId}
+                  options={statuses.length
+                    ? statuses.map((status) => ({
+                        value: status.id,
+                        label: status.name,
+                        icon: <span className="status-dot" style={{ background: status.color }} />,
+                      }))
+                    : [{ value: '', label: '加载中…' }]}
+                />
               </label>
               <label className="create-prop">
-                <span>{assigneeId ? <Avatar user={assigneeOptions.find((member) => member.id === assigneeId)} size={15} /> : <UserRound size={14} />} 负责人</span>
-                <select value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)}>
-                  <option value="">未指派</option>
-                  {assigneeOptions.map((member) => (
-                    <option key={member.id} value={member.id}>{member.name}{member.is_external ? '（外部）' : ''}</option>
-                  ))}
-                </select>
-                <ChevronDown size={13} />
+                <span>负责人</span>
+                <Select
+                  className="create-select"
+                  value={assigneeId}
+                  onChange={setAssigneeId}
+                  options={[
+                    { value: '', label: '未指派' },
+                    ...assigneeOptions.map((member) => ({
+                      value: member.id,
+                      label: `${member.name}${member.is_external ? '（外部）' : ''}`,
+                      icon: <Avatar user={member} size={20} />,
+                    })),
+                  ]}
+                />
               </label>
               <label className="create-prop">
                 <span><CalendarDays size={14} /> 截止日期</span>
-                <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+                <DateField
+                  className="create-date"
+                  value={dueDate}
+                  onChange={setDueDate}
+                  placeholder="选择日期"
+                  ariaLabel="截止日期"
+                />
               </label>
               <label className="create-prop">
                 <span><Flag size={14} /> 优先级</span>
-                <select value={priority} onChange={(event) => setPriority(event.target.value)}>
-                  <option value="0">无优先级</option>
-                  <option value="1">紧急</option>
-                  <option value="2">高</option>
-                  <option value="3">普通</option>
-                  <option value="4">低</option>
-                </select>
-                <ChevronDown size={13} />
+                <Select
+                  className="create-select"
+                  value={priority}
+                  onChange={setPriority}
+                  menuWidth={180}
+                  options={[
+                    { value: '0', label: '无优先级' },
+                    { value: '1', label: '紧急' },
+                    { value: '2', label: '高' },
+                    { value: '3', label: '普通' },
+                    { value: '4', label: '低' },
+                  ]}
+                />
               </label>
             </div>
 

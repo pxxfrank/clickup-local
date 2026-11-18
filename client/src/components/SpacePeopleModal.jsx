@@ -3,6 +3,7 @@ import { Plus, Trash2, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { Avatar, Modal, Spinner } from './ui.jsx';
+import Select from './Select.jsx';
 
 export default function SpacePeopleModal({ open, space, onClose }) {
   const { bootstrap, toast } = useApp();
@@ -76,18 +77,18 @@ export default function SpacePeopleModal({ open, space, onClose }) {
     >
       <div className="space-people-modal">
         <div className="space-people-add">
-          <select
+          <Select
             className="input"
             value={selectedUserId}
-            onChange={(event) => setSelectedUserId(event.target.value)}
-          >
-            <option value="">选择工作空间成员或外部责任人</option>
-            {available.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name}{person.is_external ? '（外部）' : ''}
-              </option>
-            ))}
-          </select>
+            onChange={setSelectedUserId}
+            placeholder="选择工作空间成员或外部责任人"
+            menuWidth={340}
+            options={available.map((person) => ({
+              value: person.id,
+              label: `${person.name}${person.is_external ? '（外部）' : ''}`,
+              icon: <Avatar user={person} size={20} />,
+            }))}
+          />
           <button type="button" className="btn btn-primary btn-sm" onClick={addPerson} disabled={!selectedUserId || adding}>
             {adding ? <Spinner size={13} /> : <Plus size={13} />} 添加
           </button>

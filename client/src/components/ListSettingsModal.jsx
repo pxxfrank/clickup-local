@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
 import { PROJECT_COLORS, colorInfo } from '../lib/colors.js';
 import { ConfirmDialog, Modal, Spinner } from './ui.jsx';
+import Select from './Select.jsx';
 
 const STATUS_COLORS = ['#87909e', '#4a9eff', '#a25ddc', '#f59e0b', '#2ea44f', '#e5484d', '#26c6da', '#6b7280'];
 const LIST_ICONS = ['📋', '🏃', '🐞', '📄', '💻', '🎨', '🔬', '✍️', '🎪', '📈', '🤝', '👋', '📌', '🧪'];
@@ -386,15 +387,13 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
                           />
                         ))}
                       </div>
-                      <select
+                      <Select
                         className="mini-select"
                         value={editingStatus.type}
-                        onChange={(event) => setEditingStatus({ ...editingStatus, type: event.target.value })}
-                      >
-                        {STATUS_TYPES.map((type) => (
-                          <option key={type.value} value={type.value}>{type.label}</option>
-                        ))}
-                      </select>
+                        onChange={(type) => setEditingStatus({ ...editingStatus, type })}
+                        options={STATUS_TYPES}
+                        menuWidth={170}
+                      />
                       <button type="submit" className="btn btn-primary btn-xs" disabled={busy}>保存</button>
                       <button type="button" className="btn btn-ghost btn-xs" onClick={() => setEditingStatus(null)}>取消</button>
                     </form>
@@ -449,11 +448,13 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
                     />
                   ))}
                 </div>
-                <select className="mini-select" value={newStatus.type} onChange={(event) => setNewStatus({ ...newStatus, type: event.target.value })}>
-                  {STATUS_TYPES.map((type) => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
-                  ))}
-                </select>
+                <Select
+                  className="mini-select"
+                  value={newStatus.type}
+                  onChange={(type) => setNewStatus({ ...newStatus, type })}
+                  options={STATUS_TYPES}
+                  menuWidth={170}
+                />
                 <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
                   {busy ? <Spinner size={14} /> : <Check size={14} />} 添加
                 </button>
@@ -494,15 +495,13 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
                   value={fieldDraft.name}
                   onChange={(event) => setFieldDraft({ ...fieldDraft, name: event.target.value })}
                 />
-                <select
+                <Select
                   className="mini-select"
                   value={fieldDraft.type}
-                  onChange={(event) => setFieldDraft({ ...fieldDraft, type: event.target.value })}
-                >
-                  {FIELD_TYPES.map((type) => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
-                  ))}
-                </select>
+                  onChange={(type) => setFieldDraft({ ...fieldDraft, type })}
+                  options={FIELD_TYPES}
+                  menuWidth={170}
+                />
                 {fieldDraft.type === 'select' && (
                   <input
                     className="input"
@@ -620,29 +619,29 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
                 <div className="form-grid-2">
                   <label className="field">
                     <span className="field-label">触发条件</span>
-                    <select
+                    <Select
                       className="input"
                       value={automationDraft.trigger_type}
-                      onChange={(event) => setAutomationDraft({ ...automationDraft, trigger_type: event.target.value })}
-                    >
-                      <option value="task_created">任务创建时</option>
-                      <option value="status_changed">状态变更时</option>
-                      <option value="task_completed">任务完成时</option>
-                    </select>
+                      onChange={(trigger_type) => setAutomationDraft({ ...automationDraft, trigger_type })}
+                      options={[
+                        { value: 'task_created', label: '任务创建时' },
+                        { value: 'status_changed', label: '状态变更时' },
+                        { value: 'task_completed', label: '任务完成时' },
+                      ]}
+                    />
                   </label>
                   {automationDraft.trigger_type === 'status_changed' ? (
                     <label className="field">
                       <span className="field-label">变更为</span>
-                      <select
+                      <Select
                         className="input"
                         value={automationDraft.triggerStatusId}
-                        onChange={(event) => setAutomationDraft({ ...automationDraft, triggerStatusId: event.target.value })}
-                      >
-                        <option value="">任意状态</option>
-                        {sortedStatuses.map((status) => (
-                          <option key={status.id} value={status.id}>{status.name}</option>
-                        ))}
-                      </select>
+                        onChange={(triggerStatusId) => setAutomationDraft({ ...automationDraft, triggerStatusId })}
+                        options={[
+                          { value: '', label: '任意状态' },
+                          ...sortedStatuses.map((status) => ({ value: status.id, label: status.name })),
+                        ]}
+                      />
                     </label>
                   ) : (
                     <div className="automation-trigger-note">
@@ -654,74 +653,70 @@ export default function ListSettingsModal({ open, list, statuses, fields, onClos
                 <div className="form-grid-2">
                   <label className="field">
                     <span className="field-label">执行动作</span>
-                    <select
+                    <Select
                       className="input"
                       value={automationDraft.action_type}
-                      onChange={(event) => setAutomationDraft({ ...automationDraft, action_type: event.target.value })}
-                    >
-                      <option value="set_status">修改状态</option>
-                      <option value="set_assignee">指派负责人</option>
-                      <option value="set_priority">设置优先级</option>
-                      <option value="add_tag">添加标签</option>
-                    </select>
+                      onChange={(action_type) => setAutomationDraft({ ...automationDraft, action_type })}
+                      options={[
+                        { value: 'set_status', label: '修改状态' },
+                        { value: 'set_assignee', label: '指派负责人' },
+                        { value: 'set_priority', label: '设置优先级' },
+                        { value: 'add_tag', label: '添加标签' },
+                      ]}
+                    />
                   </label>
                   {automationDraft.action_type === 'set_status' && (
                     <label className="field">
                       <span className="field-label">目标状态</span>
-                      <select
+                      <Select
                         className="input"
                         value={automationDraft.actionStatusId}
-                        onChange={(event) => setAutomationDraft({ ...automationDraft, actionStatusId: event.target.value })}
-                      >
-                        {sortedStatuses.map((status) => (
-                          <option key={status.id} value={status.id}>{status.name}</option>
-                        ))}
-                      </select>
+                        onChange={(actionStatusId) => setAutomationDraft({ ...automationDraft, actionStatusId })}
+                        options={sortedStatuses.map((status) => ({ value: status.id, label: status.name }))}
+                      />
                     </label>
                   )}
                   {automationDraft.action_type === 'set_assignee' && (
                     <label className="field">
                       <span className="field-label">负责人</span>
-                      <select
+                      <Select
                         className="input"
                         value={automationDraft.actionAssigneeId}
-                        onChange={(event) => setAutomationDraft({ ...automationDraft, actionAssigneeId: event.target.value })}
-                      >
-                        <option value="">清除负责人</option>
-                        {members.map((member) => (
-                          <option key={member.id} value={member.id}>{member.name}</option>
-                        ))}
-                      </select>
+                        onChange={(actionAssigneeId) => setAutomationDraft({ ...automationDraft, actionAssigneeId })}
+                        options={[
+                          { value: '', label: '清除负责人' },
+                          ...members.map((member) => ({ value: member.id, label: member.name })),
+                        ]}
+                      />
                     </label>
                   )}
                   {automationDraft.action_type === 'set_priority' && (
                     <label className="field">
                       <span className="field-label">优先级</span>
-                      <select
+                      <Select
                         className="input"
                         value={automationDraft.actionPriority}
-                        onChange={(event) => setAutomationDraft({ ...automationDraft, actionPriority: Number(event.target.value) })}
-                      >
-                        <option value={1}>紧急</option>
-                        <option value={2}>高</option>
-                        <option value={3}>普通</option>
-                        <option value={4}>低</option>
-                        <option value={0}>无</option>
-                      </select>
+                        onChange={(actionPriority) => setAutomationDraft({ ...automationDraft, actionPriority })}
+                        options={[
+                          { value: 1, label: '紧急' },
+                          { value: 2, label: '高' },
+                          { value: 3, label: '普通' },
+                          { value: 4, label: '低' },
+                          { value: 0, label: '无' },
+                        ]}
+                        menuWidth={170}
+                      />
                     </label>
                   )}
                   {automationDraft.action_type === 'add_tag' && (
                     <label className="field">
                       <span className="field-label">标签</span>
-                      <select
+                      <Select
                         className="input"
                         value={automationDraft.actionTagId}
-                        onChange={(event) => setAutomationDraft({ ...automationDraft, actionTagId: event.target.value })}
-                      >
-                        {tags.map((tag) => (
-                          <option key={tag.id} value={tag.id}>{tag.name}</option>
-                        ))}
-                      </select>
+                        onChange={(actionTagId) => setAutomationDraft({ ...automationDraft, actionTagId })}
+                        options={tags.map((tag) => ({ value: tag.id, label: tag.name }))}
+                      />
                     </label>
                   )}
                 </div>

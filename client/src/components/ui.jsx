@@ -166,7 +166,9 @@ export function Modal({ open, onClose, title, subtitle, children, footer, width 
   useEffect(() => {
     if (!open) return undefined;
     function onKeyDown(event) {
-      if (event.key === 'Escape') onClose?.();
+      if (event.key !== 'Escape') return;
+      if (document.querySelector('.popover-menu')) return;
+      onClose?.();
     }
     document.addEventListener('keydown', onKeyDown);
     const previous = document.body.style.overflow;

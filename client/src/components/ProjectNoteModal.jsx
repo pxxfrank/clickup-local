@@ -5,6 +5,8 @@ import { api } from '../lib/api.js';
 import { format } from '../lib/date.js';
 import { Modal, Spinner } from './ui.jsx';
 import MarkdownEditor from './MarkdownEditor.jsx';
+import Select from './Select.jsx';
+import DateField from './DateField.jsx';
 
 const KINDS = [
   { value: 'note', label: '记录' },
@@ -101,19 +103,19 @@ export default function ProjectNoteModal({ open, onClose, listId, tasks = [], de
           </label>
           <label className="field">
             <span className="field-label">记录类型</span>
-            <select className="input" value={kind} onChange={(event) => setKind(event.target.value)}>
-              {KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </select>
+            <Select className="input" value={kind} onChange={setKind} options={KINDS} menuWidth={220} />
           </label>
         </div>
         <div className="journal-note-meta-row">
           <label className="field">
             <span className="field-label">发生时间</span>
-            <input
+            <DateField
               className="input"
               type="datetime-local"
               value={occurredAt}
-              onChange={(event) => setOccurredAt(event.target.value)}
+              onChange={setOccurredAt}
+              placeholder="选择发生时间"
+              ariaLabel="发生时间"
             />
           </label>
           <label className="journal-pin-toggle">

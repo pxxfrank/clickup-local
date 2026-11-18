@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarRange, Check, Download, ExternalLink, PencilLine, Printer } from 'lucide-react';
 import { addDays, endOfWeek, format, startOfWeek } from '../lib/date.js';
 import { Modal } from './ui.jsx';
+import Select from './Select.jsx';
 
 export default function WeeklyReportModal({ open, onClose, list }) {
   const [weekOffset, setWeekOffset] = useState(0);
@@ -115,13 +116,16 @@ body { margin: 0; background: #fff; }
           <button type="button" className="btn btn-ghost btn-xs" onClick={() => setWeekOffset((value) => Math.max(-8, value - 1))} disabled={weekOffset <= -8}>
             上一周
           </button>
-          <select className="mini-select" value={weekOffset} onChange={(event) => setWeekOffset(Number(event.target.value))}>
-            {weeks.map((week) => (
-              <option key={week.offset} value={week.offset}>
-                {week.offset === 0 ? `本周 · ${week.label}` : week.offset === -1 ? `上周 · ${week.label}` : week.label}
-              </option>
-            ))}
-          </select>
+          <Select
+            className="mini-select"
+            value={weekOffset}
+            onChange={setWeekOffset}
+            menuWidth={220}
+            options={weeks.map((week) => ({
+              value: week.offset,
+              label: week.offset === 0 ? `本周 · ${week.label}` : week.offset === -1 ? `上周 · ${week.label}` : week.label,
+            }))}
+          />
           <button type="button" className="btn btn-ghost btn-xs" onClick={() => setWeekOffset((value) => Math.min(4, value + 1))} disabled={weekOffset >= 4}>
             下一周
           </button>

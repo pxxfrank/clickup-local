@@ -775,14 +775,21 @@
   background: #fff;
 }
 
-.journal-date-filter input {
-  width: 100px;
+.journal-date-filter .journal-date-input {
+  width: 104px;
+  height: 28px;
+  padding: 0;
   border: 0;
-  outline: none;
+  border-radius: 0;
   background: transparent;
+  box-shadow: none;
   color: var(--ink-2);
   font-size: 8.5px;
-  font-family: inherit;
+  gap: 3px;
+}
+
+.journal-date-filter .ui-date-icon {
+  display: none;
 }
 
 .journal-routine-toggle {
@@ -2441,8 +2448,20 @@
   font-family: inherit;
 }
 
-.meeting-meta-field input[type="datetime-local"] {
+.meeting-meta-field .ui-date {
   width: 145px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 10px;
+  gap: 0;
+}
+
+.meeting-meta-field .ui-date-icon {
+  display: none;
 }
 
 .meeting-meta-participants {

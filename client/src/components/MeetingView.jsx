@@ -18,6 +18,7 @@ import { format } from '../lib/date.js';
 import { taskReferenceText } from '../lib/markdown.js';
 import { ConfirmDialog, EmptyState, IconButton, MenuItem, Popover, Spinner } from './ui.jsx';
 import MarkdownEditor from './MarkdownEditor.jsx';
+import DateField from './DateField.jsx';
 
 function formatMeetingTime(value) {
   if (!value) return '未设置时间';
@@ -503,12 +504,12 @@ function MeetingEditor({ meeting, tasks, onOpenTask, onSaved, onChanged, toast }
             <label className="meeting-meta-field">
               <CalendarDays size={13} />
               <span>时间</span>
-              <input
+              <DateField
+                className="meeting-date-input"
                 type="datetime-local"
-                step={900}
                 value={draft.meeting_at || ''}
-                onChange={(event) => {
-                  const value = event.target.value;
+                clearable={false}
+                onChange={(value) => {
                   if (!value) {
                     setDraft({ ...draft, meeting_at: value });
                     return;
