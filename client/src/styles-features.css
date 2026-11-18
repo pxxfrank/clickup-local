@@ -818,12 +818,95 @@
   min-width: 0;
 }
 
+.journal-pinned-section {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid #ecd9a7;
+  border-radius: 9px;
+  background: #fffdf7;
+}
+
+.journal-pinned-section > h3 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  color: #9a6b15;
+  font-size: 9.5px;
+}
+
+.journal-pinned-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
 .journal-note {
   padding: 12px 13px;
   border: 1px solid #eadff9;
   border-left: 3px solid var(--brand);
   border-radius: 7px;
   background: #fdfcff;
+}
+
+.journal-note.is-pinned {
+  background: #fffdf8;
+  border-color: #ecd9a7;
+  border-left-color: #d99a1b;
+}
+
+.journal-note-title-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.journal-kind {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  font-size: 7.5px;
+  font-weight: 600;
+}
+
+.journal-kind.is-decision { background: #eef5ff; color: #2f6fd6; }
+.journal-kind.is-risk { background: #fff1f1; color: #c63d43; }
+.journal-kind.is-stage { background: #effaf5; color: #21835e; }
+.journal-kind.is-retro { background: #f7f1ff; color: #7650bd; }
+.journal-kind.is-meeting { background: #fff7e9; color: #a96c09; }
+.journal-kind.is-change { background: #f3f2f7; color: var(--muted); }
+
+.journal-pin-mark {
+  color: #d99a1b;
+  fill: #f5c45f;
+}
+
+.journal-linked-tasks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 7px;
+}
+
+.journal-linked-tasks button {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #f0ebff;
+  color: var(--brand-strong);
+  font-size: 8px;
+}
+
+.journal-linked-tasks button:hover {
+  background: #e7defc;
+}
+
+.journal-edited {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted-2);
+  font-size: 7.5px;
 }
 
 .journal-note-head {
@@ -983,6 +1066,83 @@
 .journal-meeting span {
   color: var(--muted-2);
   font-size: 8.5px;
+}
+
+.journal-note-meta-row {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
+
+.journal-note-meta-row .field {
+  flex: 1;
+}
+
+.journal-pin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.journal-pin-toggle input {
+  accent-color: #d99a1b;
+}
+
+.journal-task-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 110px;
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.journal-task-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 220px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.journal-task-option span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journal-task-option input {
+  accent-color: var(--brand);
+}
+
+.journal-task-option.is-checked {
+  border-color: var(--brand-line);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
+.journal-task-empty {
+  color: var(--muted-2);
+  font-size: 8.5px;
+}
+
+@media (max-width: 700px) {
+  .journal-note-meta-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 800px) {

@@ -338,6 +338,32 @@ function snapshotRetrospectiveTasks(db, listId, retrospectiveId, now) {
   return count;
 }
 
+const NOTE_KINDS = ['note', 'decision', 'risk', 'stage', 'retro', 'meeting', 'change'];
+
+function normalizeNoteKind(value) {
+  return NOTE_KINDS.includes(value) ? value : 'note';
+}
+
+function normalizeOccurredAt(value) {
+  if (!value) return new Date().toISOString();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+}
+
+function replaceNoteTasks(noteId, listId, taskIds) {
+  if (!Array.isArray(taskIds)) return;
+  const db = getDb();
+  db.prepare('DELETE FROM project_note_tasks WHERE note_id = ?').run(noteId);
+  const insert = db.prepare(
+    'INSERT OR IGNORE INTO project_note_tasks (note_id, task_id, created_at) VALUES (?,?,?)'
+  );
+  const now = new Date().toISOString();
+  for (const taskId of [...new Set(taskIds.filter(Boolean))]) {
+    const task = db.prepare('SELECT id FROM tasks WHERE id = ? AND list_id = ?').get(taskId, listId);
+    if (task) insert.run(noteId, task.id, now);
+  }
+}
+
 function isListAssignable(listId, userId) {
   const db = getDb();
   const list = db
@@ -1502,6 +1528,18 @@ export function createApiRouter() {
   router.get('/lists/:id/journal', (req, res) => {
     const list = accessibleList(req.params.id, req.user.id);
     if (!list) return res.status(404).json({ error: '列表不存在' });
+    const noteTasks = new Map();
+    for (const link of db
+      .prepare(
+        `SELECT pnt.note_id, t.id, t.name FROM project_note_tasks pnt
+         JOIN tasks t ON t.id = pnt.task_id
+         JOIN project_notes pn ON pn.id = pnt.note_id
+         WHERE pn.list_id = ? ORDER BY t.name`
+      )
+      .all(list.id)) {
+      if (!noteTasks.has(link.note_id)) noteTasks.set(link.note_id, []);
+      noteTasks.get(link.note_id).push({ id: link.id, name: link.name });
+    }
     const notes = db
       .prepare(
         `SELECT pn.*, u.name AS user_name, u.color AS user_color
@@ -1513,11 +1551,16 @@ export function createApiRouter() {
         id: `note-${note.id}`,
         source_id: note.id,
         kind: 'note',
+        note_kind: note.kind || 'note',
         title: note.title,
         body: note.body || '',
+        pinned: Boolean(note.pinned),
+        tasks: noteTasks.get(note.id) || [],
         user_name: note.user_name,
         user_color: note.user_color,
-        created_at: note.updated_at || note.created_at,
+        occurred_at: note.occurred_at || note.created_at,
+        updated_at: note.updated_at,
+        created_at: note.created_at,
       }));
     const progress = db
       .prepare(
@@ -1536,6 +1579,7 @@ export function createApiRouter() {
         body: comment.body,
         user_name: comment.user_name,
         user_color: comment.user_color,
+        occurred_at: comment.created_at,
         created_at: comment.created_at,
       }));
     const activity = db
@@ -1556,6 +1600,7 @@ export function createApiRouter() {
         body: item.message,
         user_name: item.user_name,
         user_color: item.user_color,
+        occurred_at: item.created_at,
         created_at: item.created_at,
       }));
     const meetings = db
@@ -1566,7 +1611,8 @@ export function createApiRouter() {
         source_id: meeting.id,
         kind: 'meeting',
         title: meeting.title,
-        created_at: meeting.meeting_at || meeting.created_at,
+        occurred_at: meeting.meeting_at || meeting.created_at,
+        created_at: meeting.created_at,
       }));
     const counts = {
       note: notes.length,
@@ -1575,7 +1621,7 @@ export function createApiRouter() {
       meeting: meetings.length,
     };
     const items = [...notes, ...progress, ...activity, ...meetings]
-      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+      .sort((a, b) => String(b.occurred_at).localeCompare(String(a.occurred_at)))
       .slice(0, 240);
     res.json({ items, counts });
   });
@@ -1589,8 +1635,21 @@ export function createApiRouter() {
     const id = randomId();
     const now = new Date().toISOString();
     db.prepare(
-      'INSERT INTO project_notes (id, list_id, title, body, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?)'
-    ).run(id, list.id, title, body, req.user.id, now, now);
+      `INSERT INTO project_notes (id, list_id, title, body, kind, occurred_at, pinned, created_by, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`
+    ).run(
+      id,
+      list.id,
+      title,
+      body,
+      normalizeNoteKind(req.body?.kind),
+      normalizeOccurredAt(req.body?.occurred_at),
+      req.body?.pinned ? 1 : 0,
+      req.user.id,
+      now,
+      now
+    );
+    replaceNoteTasks(id, list.id, req.body?.task_ids);
     logActivity(list.workspace_id, null, req.user.id, 'project_note', `记录了项目事项「${title}」`);
     res.status(201).json(db.prepare('SELECT * FROM project_notes WHERE id = ?').get(id));
   });
@@ -1607,12 +1666,18 @@ export function createApiRouter() {
     if (!note) return res.status(404).json({ error: '项目记录不存在' });
     const title = req.body?.title !== undefined ? String(req.body.title).trim() : note.title;
     if (!title) return res.status(400).json({ error: '记录标题不能为空' });
-    db.prepare('UPDATE project_notes SET title = ?, body = ?, updated_at = ? WHERE id = ?').run(
+    db.prepare(
+      `UPDATE project_notes SET title = ?, body = ?, kind = ?, occurred_at = ?, pinned = ?, updated_at = ? WHERE id = ?`
+    ).run(
       title,
       req.body?.body !== undefined ? String(req.body.body) : note.body,
+      req.body?.kind !== undefined ? normalizeNoteKind(req.body.kind) : note.kind,
+      req.body?.occurred_at !== undefined ? normalizeOccurredAt(req.body.occurred_at) : note.occurred_at || note.created_at,
+      req.body?.pinned !== undefined ? (req.body.pinned ? 1 : 0) : note.pinned,
       new Date().toISOString(),
       note.id
     );
+    replaceNoteTasks(note.id, note.list_id, req.body?.task_ids);
     res.json(db.prepare('SELECT * FROM project_notes WHERE id = ?').get(note.id));
   });
 
@@ -2344,7 +2409,7 @@ export function createApiRouter() {
       dbBytes = 0;
     }
     res.json({
-      version: '1.18.0',
+      version: '1.19.0',
       data_dir: DATA_DIR,
       db_bytes: dbBytes,
       users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,

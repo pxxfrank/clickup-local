@@ -157,10 +157,22 @@ CREATE TABLE IF NOT EXISTS project_notes (
   list_id TEXT NOT NULL,
   title TEXT NOT NULL,
   body TEXT DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'note',
+  occurred_at TEXT,
+  pinned INTEGER NOT NULL DEFAULT 0,
   created_by TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS project_note_tasks (
+  note_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (note_id, task_id),
+  FOREIGN KEY (note_id) REFERENCES project_notes(id) ON DELETE CASCADE,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS brainstorm_items (
@@ -417,6 +429,7 @@ CREATE INDEX IF NOT EXISTS idx_activity_workspace ON activity(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_brainstorm_list ON brainstorm_items(list_id);
 CREATE INDEX IF NOT EXISTS idx_project_notes_list ON project_notes(list_id);
+CREATE INDEX IF NOT EXISTS idx_project_note_tasks_note ON project_note_tasks(note_id);
 CREATE INDEX IF NOT EXISTS idx_milestones_list ON milestones(list_id);
 CREATE INDEX IF NOT EXISTS idx_participants_task ON task_participants(task_id);
 CREATE INDEX IF NOT EXISTS idx_dependencies_task ON task_dependencies(task_id);
@@ -463,6 +476,18 @@ export function getDb() {
   if (!taskColumns.some((column) => column.name === 'is_key_action')) {
     database.exec('ALTER TABLE tasks ADD COLUMN is_key_action INTEGER NOT NULL DEFAULT 0');
   }
+  const noteColumns = database.prepare('PRAGMA table_info(project_notes)').all();
+  if (!noteColumns.some((column) => column.name === 'kind')) {
+    database.exec("ALTER TABLE project_notes ADD COLUMN kind TEXT NOT NULL DEFAULT 'note'");
+  }
+  if (!noteColumns.some((column) => column.name === 'occurred_at')) {
+    database.exec('ALTER TABLE project_notes ADD COLUMN occurred_at TEXT');
+    database.exec('UPDATE project_notes SET occurred_at = created_at WHERE occurred_at IS NULL');
+  }
+  if (!noteColumns.some((column) => column.name === 'pinned')) {
+    database.exec('ALTER TABLE project_notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0');
+  }
+  database.exec('UPDATE project_notes SET occurred_at = created_at WHERE occurred_at IS NULL');
   const row = database.prepare('SELECT COUNT(*) AS count FROM users').get();
   if (!row || row.count === 0) {
     seedDatabase(database);

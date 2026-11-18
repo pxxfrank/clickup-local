@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Download,
   Pencil,
+  Pin,
   Plus,
   Trash2,
 } from 'lucide-react';
@@ -23,6 +24,24 @@ const FILTERS = [
   { value: 'meeting', label: '会议' },
 ];
 
+const NOTE_KINDS = [
+  { value: 'note', label: '记录' },
+  { value: 'decision', label: '决策' },
+  { value: 'risk', label: '风险' },
+  { value: 'stage', label: '阶段总结' },
+  { value: 'retro', label: '复盘' },
+  { value: 'meeting', label: '会议结论' },
+  { value: 'change', label: '变更' },
+];
+
+const NOTE_KIND_LABELS = Object.fromEntries(NOTE_KINDS.map((item) => [item.value, item.label]));
+
+function datetimeLocalValue(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return format(new Date(), "yyyy-MM-dd'T'HH:mm");
+  return format(date, "yyyy-MM-dd'T'HH:mm");
+}
+
 function noteMarkdown(item, tasks) {
   return renderMarkdownWithTasks(item.body || '', tasks);
 }
@@ -30,8 +49,15 @@ function noteMarkdown(item, tasks) {
 function downloadJournal(list, items, tasks) {
   const lines = [`# ${list.name} · 项目记录`, ''];
   for (const item of items) {
-    lines.push(`## ${formatDateTime(item.created_at)} · ${item.kind === 'note' ? item.title : item.kind}`);
-    if (item.title && item.kind !== 'note') lines.push(`**${item.title}**`);
+    const occurredAt = item.occurred_at || item.created_at;
+    if (item.kind === 'note') {
+      lines.push(`## ${formatDateTime(occurredAt)} · ${NOTE_KIND_LABELS[item.note_kind] || '记录'} · ${item.title}`);
+      if (item.tasks?.length) lines.push(`关联任务：${item.tasks.map((task) => task.name).join('、')}`);
+    } else {
+      lines.push(`## ${formatDateTime(occurredAt)} · ${item.kind === 'progress' ? '任务进展' : item.kind === 'activity' ? '任务动态' : '会议'}`);
+      if (item.task_name) lines.push(`任务：${item.task_name}`);
+      if (item.title) lines.push(`**${item.title}**`);
+    }
     lines.push('', taskReferenceText(item.body || '', tasks), '');
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
@@ -73,22 +99,64 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
     () => (filter === 'all' ? journal.items : journal.items.filter((item) => item.kind === filter)),
     [journal.items, filter]
   );
+  const pinnedNotes = useMemo(
+    () => filtered.filter((item) => item.kind === 'note' && item.pinned),
+    [filtered]
+  );
+  const timelineItems = useMemo(
+    () => filtered.filter((item) => !(item.kind === 'note' && item.pinned)),
+    [filtered]
+  );
   const grouped = useMemo(() => {
     const map = new Map();
-    for (const item of filtered) {
-      const date = String(item.created_at || '').slice(0, 10);
+    for (const item of timelineItems) {
+      const date = String(item.occurred_at || item.created_at || '').slice(0, 10);
       if (!map.has(date)) map.set(date, []);
       map.get(date).push(item);
     }
     return [...map.entries()];
-  }, [filtered]);
+  }, [timelineItems]);
 
   function openNewNote() {
-    setNoteDraft({ id: null, title: '', body: '' });
+    setNoteDraft({
+      id: null,
+      title: '',
+      body: '',
+      kind: 'note',
+      occurred_at: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+      pinned: false,
+      task_ids: [],
+    });
   }
 
   function openEditNote(item) {
-    setNoteDraft({ id: item.source_id, title: item.title, body: item.body || '' });
+    setNoteDraft({
+      id: item.source_id,
+      title: item.title,
+      body: item.body || '',
+      kind: item.note_kind || 'note',
+      occurred_at: datetimeLocalValue(item.occurred_at || item.created_at),
+      pinned: Boolean(item.pinned),
+      task_ids: (item.tasks || []).map((task) => task.id),
+    });
+  }
+
+  async function togglePinned(item) {
+    try {
+      await api.patch(`/journal/${item.source_id}`, { pinned: !item.pinned });
+      await loadJournal();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  }
+
+  function toggleNoteTask(taskId) {
+    setNoteDraft((current) => {
+      const ids = new Set(current.task_ids || []);
+      if (ids.has(taskId)) ids.delete(taskId);
+      else ids.add(taskId);
+      return { ...current, task_ids: [...ids] };
+    });
   }
 
   async function saveNote(event) {
@@ -125,6 +193,41 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
     }
   }
 
+  function renderNote(item) {
+    return (
+      <article className={`journal-note ${item.pinned ? 'is-pinned' : ''}`} key={item.id}>
+        <div className="journal-note-head">
+          <div>
+            <div className="journal-note-title-line">
+              <span className={`journal-kind is-${item.note_kind || 'note'}`}>{NOTE_KIND_LABELS[item.note_kind] || '记录'}</span>
+              {item.pinned && <Pin size={11} className="journal-pin-mark" />}
+              <strong>{item.title}</strong>
+            </div>
+            <span>{item.user_name || '项目成员'} · {formatDateTime(item.occurred_at || item.created_at)}</span>
+          </div>
+          <div className="journal-note-actions">
+            <button type="button" className="icon-btn" onClick={() => togglePinned(item)} title={item.pinned ? '取消置顶' : '置顶记录'}>
+              <Pin size={13} />
+            </button>
+            <button type="button" className="icon-btn" onClick={() => openEditNote(item)} title="编辑项目记录"><Pencil size={13} /></button>
+            <button type="button" className="icon-btn icon-btn-danger" onClick={() => setDeleteTarget(item)} title="删除项目记录"><Trash2 size={13} /></button>
+          </div>
+        </div>
+        {item.tasks?.length > 0 && (
+          <div className="journal-linked-tasks">
+            {item.tasks.map((task) => (
+              <button type="button" key={task.id} onClick={() => onOpenTask(task.id)}>{task.name}</button>
+            ))}
+          </div>
+        )}
+        {item.body && <div className="journal-note-body markdown-body" dangerouslySetInnerHTML={{ __html: noteMarkdown(item, tasks) }} />}
+        {item.updated_at && item.updated_at !== item.occurred_at && item.updated_at !== item.created_at && (
+          <span className="journal-edited">最后编辑于 {formatDateTime(item.updated_at)}</span>
+        )}
+      </article>
+    );
+  }
+
   return (
     <div className="journal-view">
       <div className="journal-head">
@@ -158,8 +261,14 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
 
       {loading ? (
         <div className="journal-loading"><Spinner size={18} /> 正在整理项目记录…</div>
-      ) : grouped.length ? (
+      ) : pinnedNotes.length || grouped.length ? (
         <div className="journal-timeline">
+          {pinnedNotes.length > 0 && (
+            <section className="journal-pinned-section">
+              <h3><Pin size={12} /> 置顶记录</h3>
+              <div className="journal-pinned-list">{pinnedNotes.map((item) => renderNote(item))}</div>
+            </section>
+          )}
           {grouped.map(([date, items]) => (
             <section className="journal-day" key={date}>
               <div className="journal-date">
@@ -169,21 +278,7 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
               <div className="journal-day-items">
                 {items.map((item) => {
                   if (item.kind === 'note') {
-                    return (
-                      <article className="journal-note" key={item.id}>
-                        <div className="journal-note-head">
-                          <div>
-                            <strong>{item.title}</strong>
-                            <span>{item.user_name || '项目成员'} · {formatDateTime(item.created_at)}</span>
-                          </div>
-                          <div className="journal-note-actions">
-                            <button type="button" className="icon-btn" onClick={() => openEditNote(item)} title="编辑项目记录"><Pencil size={13} /></button>
-                            <button type="button" className="icon-btn icon-btn-danger" onClick={() => setDeleteTarget(item)} title="删除项目记录"><Trash2 size={13} /></button>
-                          </div>
-                        </div>
-                        {item.body && <div className="journal-note-body markdown-body" dangerouslySetInnerHTML={{ __html: noteMarkdown(item, tasks) }} />}
-                      </article>
-                    );
+                    return renderNote(item);
                   }
                   if (item.kind === 'progress') {
                     return (
@@ -196,7 +291,7 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
                             <button type="button" onClick={() => onOpenTask(item.task_id)}>{item.task_name}</button>
                           </div>
                           <div className="journal-progress-body markdown-body" dangerouslySetInnerHTML={{ __html: noteMarkdown(item, tasks) }} />
-                          <span className="journal-time">{formatDateTime(item.created_at)}</span>
+                          <span className="journal-time">{formatDateTime(item.occurred_at || item.created_at)}</span>
                         </div>
                       </div>
                     );
@@ -207,7 +302,7 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
                         <CalendarDays size={15} />
                         <div>
                           <strong>{item.title}</strong>
-                          <span>{formatDateTime(item.created_at)}</span>
+                          <span>{formatDateTime(item.occurred_at || item.created_at)}</span>
                         </div>
                       </div>
                     );
@@ -218,7 +313,7 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
                       <div>
                         <span><strong>{item.user_name || '系统'}</strong> {item.body}</span>
                         {item.task_id && <button type="button" onClick={() => onOpenTask(item.task_id)}>{item.task_name}</button>}
-                        <em>{formatDateTime(item.created_at)}</em>
+                        <em>{formatDateTime(item.occurred_at || item.created_at)}</em>
                       </div>
                     </div>
                   );
@@ -253,16 +348,64 @@ export default function JournalView({ list, tasks, onOpenTask, onChanged }) {
       >
         {noteDraft && (
           <form id="journal-note-form" className="stack" onSubmit={saveNote}>
-            <label className="field">
-              <span className="field-label">记录标题</span>
-              <input
-                className="input"
-                autoFocus
-                value={noteDraft.title}
-                onChange={(event) => setNoteDraft({ ...noteDraft, title: event.target.value })}
-                placeholder="例如：本周发布决策"
-              />
-            </label>
+            <div className="form-grid-2">
+              <label className="field">
+                <span className="field-label">记录标题</span>
+                <input
+                  className="input"
+                  autoFocus
+                  value={noteDraft.title}
+                  onChange={(event) => setNoteDraft({ ...noteDraft, title: event.target.value })}
+                  placeholder="例如：本周发布决策"
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">记录类型</span>
+                <select
+                  className="input"
+                  value={noteDraft.kind}
+                  onChange={(event) => setNoteDraft({ ...noteDraft, kind: event.target.value })}
+                >
+                  {NOTE_KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="journal-note-meta-row">
+              <label className="field">
+                <span className="field-label">发生时间</span>
+                <input
+                  className="input"
+                  type="datetime-local"
+                  value={noteDraft.occurred_at}
+                  onChange={(event) => setNoteDraft({ ...noteDraft, occurred_at: event.target.value })}
+                />
+              </label>
+              <label className="journal-pin-toggle">
+                <input
+                  type="checkbox"
+                  checked={noteDraft.pinned}
+                  onChange={(event) => setNoteDraft({ ...noteDraft, pinned: event.target.checked })}
+                />
+                置顶这条记录
+              </label>
+            </div>
+            <div className="field">
+              <span className="field-label">关联任务（可选）</span>
+              <div className="journal-task-picker">
+                {tasks.map((task) => (
+                  <label className={`journal-task-option ${noteDraft.task_ids?.includes(task.id) ? 'is-checked' : ''}`} key={task.id}>
+                    <input
+                      type="checkbox"
+                      checked={noteDraft.task_ids?.includes(task.id) || false}
+                      onChange={() => toggleNoteTask(task.id)}
+                    />
+                    <span className="status-dot" style={{ background: task.status?.color || '#87909e' }} />
+                    {task.name}
+                  </label>
+                ))}
+                {!tasks.length && <span className="journal-task-empty">当前项目还没有任务。</span>}
+              </div>
+            </div>
             <div className="field">
               <span className="field-label">内容</span>
               <MarkdownEditor
