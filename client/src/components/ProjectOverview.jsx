@@ -16,17 +16,12 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
 import { api } from '../lib/api.js';
-import { addDays, addMonths, dueTone, format, formatDateSmart, parseDateValue, startOfMonth, todayKey, zhCN } from '../lib/date.js';
+import { addDays, dueTone, format, formatDateSmart, parseDateValue, todayKey, zhCN } from '../lib/date.js';
 import { Avatar, ConfirmDialog, Modal, ProgressBar, Spinner } from './ui.jsx';
 import Select from './Select.jsx';
 import DateField from './DateField.jsx';
 
 const PHASE_COLORS = ['#7B68EE', '#4A9EFF', '#2EA44F', '#F59E0B', '#F06A6A', '#EC4899'];
-const TIMELINE_CARD_WIDTH = 168;
-const TIMELINE_CARD_HEIGHT = 88;
-const TIMELINE_GUTTER = 96;
-const TIMELINE_PHASE_LANE = 52;
-const TIMELINE_MS_GAP = 12;
 
 function emptyMilestoneForm(listColor) {
   return {
@@ -169,101 +164,59 @@ export default function ProjectOverview({
     );
   }
 
-  const timeline = useMemo(() => {
-    if (!sortedMilestones.length) return null;
-    const today = todayKey();
-    const dateKeys = [
-      today,
-      ...sortedPhases.flatMap((phase) => [phase.start_date, phase.end_date]),
-      ...sortedMilestones.map((milestone) => milestone.due_date),
-    ].filter(Boolean);
-    const times = dateKeys.map((value) => parseDateValue(value)?.getTime()).filter((value) => value !== undefined);
-    if (!times.length) return null;
-    let start = addDays(new Date(Math.min(...times)), -5);
-    let end = addDays(new Date(Math.max(...times)), 5);
-    if (dayDistance(start, end) < 21) end = addDays(start, 21);
-    const totalDays = dayDistance(start, end) + 1;
+  function phaseForDate(value) {
+    if (!value) return null;
+    return sortedPhases.find((phase) => phase.start_date <= value && phase.end_date >= value) || null;
+  }
 
-    const pxPerDay = Math.max(10, Math.min(30, Math.ceil(960 / Math.max(1, totalDays))));
-    const xForDate = (value) => TIMELINE_GUTTER + dayDistance(start, value) * pxPerDay;
-    const width = Math.max(820, totalDays * pxPerDay + TIMELINE_GUTTER * 2);
-
-    const phaseLanes = [];
-    const phaseBlocks = sortedPhases
-      .map((phase) => {
-        const left = xForDate(phase.start_date);
-        const phaseWidth = Math.max(44, xForDate(phase.end_date) - left + pxPerDay);
-        const right = left + phaseWidth;
-        let lane = 0;
-        while (
-          phaseLanes[lane]?.some(
-            (interval) => left < interval.right + 8 && right > interval.left - 8
-          )
-        ) {
-          lane += 1;
-        }
-        if (!phaseLanes[lane]) phaseLanes[lane] = [];
-        phaseLanes[lane].push({ left, right });
-        return { ...phase, left, width: phaseWidth, lane, top: 6 + lane * TIMELINE_PHASE_LANE };
-      })
-      .filter((phase) => Number.isFinite(phase.left));
-
-    const phaseHeight = phaseLanes.length ? phaseLanes.length * TIMELINE_PHASE_LANE + 6 : 0;
-    const cardsTop = phaseHeight + 18;
-    const milestoneLanes = [];
-    const milestoneBlocks = sortedMilestones
-      .map((milestone) => {
-        const x = xForDate(milestone.due_date);
-        const left = x - TIMELINE_CARD_WIDTH / 2;
-        const right = x + TIMELINE_CARD_WIDTH / 2;
-        let lane = 0;
-        while (
-          milestoneLanes[lane]?.some(
-            (interval) => left < interval.right + 12 && right > interval.left - 12
-          )
-        ) {
-          lane += 1;
-        }
-        if (!milestoneLanes[lane]) milestoneLanes[lane] = [];
-        milestoneLanes[lane].push({ left, right });
-        return {
-          milestone,
-          x,
-          left,
-          lane,
-          top: cardsTop + lane * (TIMELINE_CARD_HEIGHT + TIMELINE_MS_GAP),
-          phase: phaseForMilestone(milestone),
-        };
-      })
-      .filter((block) => Number.isFinite(block.x));
-
-    if (!milestoneBlocks.length) return null;
-    const axisY = cardsTop + milestoneLanes.length * (TIMELINE_CARD_HEIGHT + TIMELINE_MS_GAP) + 4;
-    const dateAreaTop = axisY + 13;
-    const monthLabelTop = dateAreaTop + milestoneLanes.length * 14 + 22;
-    const monthTicks = [];
-    let cursor = startOfMonth(start);
-    while (cursor <= end) {
-      if (cursor >= start) {
-        monthTicks.push({ x: xForDate(cursor), label: format(cursor, 'M月') });
-      }
-      cursor = addMonths(cursor, 1);
-    }
-    const todayDate = parseDateValue(today);
-    const todayInRange = todayDate >= start && todayDate <= end;
-    return {
-      width,
-      height: monthLabelTop + 24,
-      axisY,
-      cardsTop,
-      phaseHeight,
-      phaseBlocks,
-      milestoneBlocks,
-      monthTicks,
-      monthLabelTop,
-      todayX: todayInRange ? xForDate(today) : null,
+  const verticalTimeline = useMemo(() => {
+    const groups = new Map();
+    const ensureGroup = (date) => {
+      if (!date) return null;
+      if (!groups.has(date)) groups.set(date, { milestones: [], tasks: [] });
+      return groups.get(date);
     };
-  }, [sortedMilestones, sortedPhases]);
+    for (const milestone of sortedMilestones) {
+      const group = ensureGroup(milestone.due_date);
+      if (group) group.milestones.push(milestone);
+    }
+    for (const task of tasks) {
+      const date = task.due_date || task.start_date;
+      const group = ensureGroup(date);
+      if (group) group.tasks.push(task);
+    }
+    if (!groups.size) {
+      for (const phase of sortedPhases) {
+        ensureGroup(phase.start_date);
+        ensureGroup(phase.end_date);
+      }
+    }
+    const priorityRank = { 1: 0, 2: 1, 3: 2, 4: 3, 0: 4 };
+    let previousPhaseId = null;
+    const rows = [...groups.entries()]
+      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+      .map(([date, group]) => {
+        const phase = phaseForDate(date);
+        const showPhaseLabel = Boolean(phase && phase.id !== previousPhaseId);
+        if (phase) previousPhaseId = phase.id;
+        group.tasks.sort((a, b) => {
+          const byPriority = (priorityRank[a.priority] ?? 9) - (priorityRank[b.priority] ?? 9);
+          if (byPriority !== 0) return byPriority;
+          return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
+        });
+        group.milestones.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+        return {
+          date,
+          milestones: group.milestones,
+          tasks: group.tasks,
+          phase,
+          showPhaseLabel,
+          isToday: date === todayKey(),
+        };
+      });
+    if (!rows.length) return null;
+    return { rows };
+  }, [tasks, sortedMilestones, sortedPhases]);
 
   async function savePurpose() {
     setSavingPurpose(true);
@@ -536,147 +489,153 @@ export default function ProjectOverview({
       <section className="overview-card overview-timeline-card overview-timeline-full">
         <div className="overview-card-head">
           <div>
-            <h3>里程碑时间轴</h3>
-            <p>横向查看项目的关键节点，左右滑动浏览更多</p>
+            <h3>项目时间轴</h3>
+            <p>纵向按阶段着色；左侧里程碑，右侧已安排时间的任务</p>
           </div>
-          <button type="button" className="section-action" onClick={() => openMilestone()}>
-            <Plus size={13} /> 新增
-          </button>
+          <div className="overview-timeline-actions">
+            <button type="button" className="section-action" onClick={() => openPhase()}>
+              <Layers size={13} /> 阶段
+            </button>
+            <button type="button" className="section-action" onClick={() => openMilestone()}>
+              <Plus size={13} /> 里程碑
+            </button>
+          </div>
         </div>
 
-        {timeline ? (
-          <div className="project-timeline-scroll">
-            <div className="project-timeline-canvas" style={{ width: timeline.width, height: timeline.height }}>
-              {timeline.monthTicks.map((tick) => (
-                <div className="timeline-month" key={`${tick.x}-${tick.label}`}>
-                  <span className="timeline-month-line" style={{ left: tick.x, height: timeline.axisY }} />
-                  <span className="timeline-month-label" style={{ left: tick.x, top: timeline.monthLabelTop }}>
-                    {tick.label}
+        {verticalTimeline ? (
+          <>
+            {sortedPhases.length > 0 && (
+              <div className="vtimeline-legend">
+                {sortedPhases.map((phase) => (
+                  <span key={phase.id} title={`${formatDateSmart(phase.start_date)} — ${formatDateSmart(phase.end_date)}`}>
+                    <i style={{ background: phase.color }} />
+                    {phase.name}
+                    <em>{formatDateSmart(phase.start_date)} — {formatDateSmart(phase.end_date)}</em>
                   </span>
-                </div>
-              ))}
-              {timeline.todayX !== null && (
-                <div className="timeline-today" style={{ left: timeline.todayX, height: timeline.axisY }}>
-                  <span>今天</span>
-                </div>
-              )}
+                ))}
+              </div>
+            )}
+            <div className="vtimeline-columns">
+              <span>里程碑</span>
+              <span>时间轴</span>
+              <span>已安排任务</span>
+            </div>
+            <div className="vtimeline-scroll">
+              <div className="vtimeline-body">
+                {verticalTimeline.rows.map((row) => (
+                  <div className={`vtimeline-row ${row.isToday ? 'is-today' : ''}`} key={row.date}>
+                    <div className="vtimeline-left">
+                      {row.milestones.map((milestone) => {
+                        const days = differenceInDays(milestone.due_date);
+                        const overdue = !milestone.completed && days < 0;
+                        const soon = !milestone.completed && days >= 0 && days <= 7;
+                        const milestoneKeyActions = keyActionsForMilestone(milestone);
+                        return (
+                          <article
+                            className={`vtimeline-ms ${milestone.completed ? 'is-completed' : ''} ${overdue ? 'is-overdue' : ''}`}
+                            key={milestone.id}
+                            style={{ borderLeftColor: row.phase?.color || milestone.color || list.color }}
+                          >
+                            <div className="vtimeline-ms-top">
+                              <button
+                                type="button"
+                                className={`milestone-check ${milestone.completed ? 'is-checked' : ''}`}
+                                onClick={() => toggleMilestone(milestone)}
+                                title={milestone.completed ? '标记为未完成' : '标记为完成'}
+                              >
+                                {milestone.completed ? <Check size={11} /> : null}
+                              </button>
+                              <strong>{milestone.name}</strong>
+                              <div className="vtimeline-ms-actions">
+                                <button type="button" onClick={() => openMilestone(milestone)} title="编辑里程碑"><Pencil size={12} /></button>
+                                <button type="button" className="is-danger" onClick={() => setDeleteTarget(milestone)} title="删除里程碑"><Trash2 size={12} /></button>
+                              </div>
+                            </div>
+                            <div className="vtimeline-ms-meta">
+                              {milestone.completed ? (
+                                <span className="milestone-badge is-done">已完成</span>
+                              ) : overdue ? (
+                                <span className="milestone-badge is-overdue">逾期 {Math.abs(days)} 天</span>
+                              ) : soon ? (
+                                <span className="milestone-badge is-soon">{days === 0 ? '今天' : `${days} 天后`}</span>
+                              ) : (
+                                <span className="milestone-badge">{days} 天后</span>
+                              )}
+                              <span>{formatDateSmart(milestone.due_date)}</span>
+                              {row.phase && <em style={{ color: row.phase.color }}>{row.phase.name}</em>}
+                            </div>
+                            {milestone.description && <p className="vtimeline-ms-desc">{milestone.description}</p>}
+                            {milestoneKeyActions.length > 0 && (
+                              <p className="vtimeline-ms-keyactions" title={milestoneKeyActions.map((task) => task.name).join('、')}>
+                                <Star size={9} />
+                                {milestoneKeyActions.slice(0, 2).map((task) => task.name).join('、')}
+                                {milestoneKeyActions.length > 2 ? ` +${milestoneKeyActions.length - 2}` : ''}
+                              </p>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </div>
 
-              {timeline.phaseBlocks.map((phase) => (
-                <div
-                  className="timeline-phase-zone"
-                  key={`zone-${phase.id}`}
-                  style={{
-                    left: phase.left,
-                    top: phase.top + 44,
-                    width: phase.width,
-                    height: Math.max(0, timeline.axisY - phase.top - 44),
-                    background: `${phase.color}0d`,
-                    borderColor: `${phase.color}33`,
-                  }}
-                />
-              ))}
-              {timeline.phaseBlocks.map((phase) => (
-                <div
-                  className="timeline-phase-block"
-                  key={phase.id}
-                  style={{
-                    left: phase.left,
-                    top: phase.top,
-                    width: phase.width,
-                    background: `${phase.color}19`,
-                    borderColor: `${phase.color}59`,
-                  }}
-                  title={`${phase.name}：${phase.start_date} — ${phase.end_date}`}
-                >
-                  <span className="timeline-phase-dot" style={{ background: phase.color }} />
-                  <strong>{phase.name}</strong>
-                  <em>{formatDateSmart(phase.start_date)} — {formatDateSmart(phase.end_date)}</em>
-                </div>
-              ))}
-
-              <div className="timeline-axis" style={{ top: timeline.axisY }} />
-
-              {timeline.milestoneBlocks.map(({ milestone, left, top, lane, phase }) => {
-                const days = differenceInDays(milestone.due_date);
-                const overdue = !milestone.completed && days < 0;
-                const soon = !milestone.completed && days >= 0 && days <= 7;
-                const milestoneKeyActions = keyActionsForMilestone(milestone);
-                return (
-                  <div
-                    className={`timeline-ms ${milestone.completed ? 'is-completed' : ''} ${overdue ? 'is-overdue' : ''}`}
-                    key={milestone.id}
-                    style={{ left, top, width: TIMELINE_CARD_WIDTH }}
-                  >
-                    <div
-                      className="timeline-ms-card"
-                      style={phase ? { borderTop: `3px solid ${phase.color}` } : undefined}
-                    >
-                      <div className="milestone-hcard-top">
-                        {milestone.completed ? (
-                          <span className="milestone-badge is-done">已完成</span>
-                        ) : overdue ? (
-                          <span className="milestone-badge is-overdue">逾期 {Math.abs(days)} 天</span>
-                        ) : soon ? (
-                          <span className="milestone-badge is-soon">{days === 0 ? '今天' : `${days} 天后`}</span>
-                        ) : (
-                          <span className="milestone-badge">{days} 天后</span>
-                        )}
-                        <div className="milestone-actions">
-                          <button type="button" onClick={() => openMilestone(milestone)}><Pencil size={12} /> 编辑</button>
-                          <button type="button" className="is-danger" onClick={() => setDeleteTarget(milestone)}><Trash2 size={12} /> 删除</button>
-                        </div>
-                      </div>
-                      <h4>{milestone.name}</h4>
-                      {milestone.description && <p className="milestone-desc">{milestone.description}</p>}
-                      {milestoneKeyActions.length > 0 && (
-                        <p
-                          className="timeline-ms-keyactions"
-                          title={milestoneKeyActions.map((task) => task.name).join('、')}
-                        >
-                          <Star size={8} />
-                          {milestoneKeyActions.slice(0, 2).map((task) => task.name).join('、')}
-                          {milestoneKeyActions.length > 2 ? ` +${milestoneKeyActions.length - 2}` : ''}
-                        </p>
+                    <div className="vtimeline-center" style={{ '--vt-phase': row.phase?.color || '#d9d8e6' }}>
+                      <span className="vtimeline-axis" />
+                      <span className="vtimeline-node" />
+                      <span className="vtimeline-date">
+                        <strong>{format(parseDateValue(row.date), 'M月d日')}</strong>
+                        <span>{format(parseDateValue(row.date), 'EEE', { locale: zhCN })}</span>
+                      </span>
+                      {row.showPhaseLabel && row.phase && (
+                        <span className="vtimeline-phase-label" style={{ color: row.phase.color }}>
+                          {row.phase.name}
+                        </span>
                       )}
                     </div>
-                    <span
-                      className="timeline-ms-connector"
-                      style={{ height: Math.max(8, timeline.axisY - top - TIMELINE_CARD_HEIGHT) }}
-                    />
-                    <button
-                      type="button"
-                      className={`milestone-check timeline-ms-node ${milestone.completed ? 'is-checked' : ''}`}
-                      style={{
-                        top: timeline.axisY - top - 9,
-                        borderColor: phase && !milestone.completed ? phase.color : undefined,
-                      }}
-                      onClick={() => toggleMilestone(milestone)}
-                      title={milestone.completed ? '标记为未完成' : '标记为完成'}
-                    >
-                      {milestone.completed ? <Check size={11} /> : null}
-                    </button>
-                    <div className="timeline-ms-date" style={{ top: timeline.axisY - top + 13 + lane * 14 }}>
-                      <strong>{formatDateSmart(milestone.due_date)}</strong>
-                      <span>{format(parseDateValue(milestone.due_date), 'EEEEEE', { locale: zhCN })}</span>
-                      {phase && <em style={{ color: phase.color }}>{phase.name}</em>}
+
+                    <div className="vtimeline-right">
+                      {row.tasks.map((task) => {
+                        const schedule = task.start_date && task.due_date && task.start_date !== task.due_date
+                          ? `${formatDateSmart(task.start_date)} → ${formatDateSmart(task.due_date)}`
+                          : formatDateSmart(task.due_date || task.start_date);
+                        return (
+                          <button
+                            type="button"
+                            className="vtimeline-task"
+                            key={task.id}
+                            onClick={() => onOpenTask?.(task.id)}
+                            title={task.name}
+                          >
+                            <span className="status-dot" style={{ background: task.status?.color || '#87909e' }} />
+                            <span className="vtimeline-task-main">
+                              <strong>{task.name}</strong>
+                              <span>{schedule}</span>
+                            </span>
+                            {task.is_key_action ? <Star size={11} className="vtimeline-task-star" /> : null}
+                            {task.assignee ? <Avatar user={task.assignee} size={18} /> : null}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          </div>
+          </>
         ) : (
-          <div className="milestone-empty milestone-empty-horizontal">
+          <div className="milestone-empty milestone-empty-vertical">
             <div className="milestone-empty-icon"><Flag size={24} /></div>
-            <h4>还没有里程碑</h4>
-            <p>把项目拆成几个关键节点，横向时间轴会让你更清楚下一步。</p>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => openMilestone()}>
-              <Plus size={14} /> 添加第一个里程碑
-            </button>
+            <h4>还没有可展示的时间节点</h4>
+            <p>添加里程碑、项目阶段，或给任务设置日期后，时间轴会在这里自动排列。</p>
+            <div className="vtimeline-empty-actions">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => openPhase()}>
+                <Layers size={14} /> 添加阶段
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => openMilestone()}>
+                <Plus size={14} /> 添加里程碑
+              </button>
+            </div>
           </div>
         )}
       </section>
-
       <div className="overview-grid">
         <section className="overview-card overview-purpose-card">
           <div className="overview-card-head">
