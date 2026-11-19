@@ -108,7 +108,7 @@ export default function HomePage() {
   const activeStatTasks = statFilter ? statTaskSets[statFilter] || [] : [];
 
   return (
-    <div className="home-page">
+    <div className="home-page apple-home">
       <section className="home-hero">
         <div className="home-hero-bg home-hero-bg-a" />
         <div className="home-hero-bg home-hero-bg-b" />
@@ -130,7 +130,7 @@ export default function HomePage() {
             <span>任务完成率</span>
             <Sparkles size={15} />
           </div>
-          <div className="hero-ring" style={{ background: `conic-gradient(#ffffff ${data.stats.completionRate * 3.6}deg, rgba(255,255,255,.18) 0deg)` }}>
+          <div className="hero-ring" style={{ background: `conic-gradient(#0071e3 ${data.stats.completionRate * 3.6}deg, rgba(0,0,0,.08) 0deg)` }}>
             <div className="hero-ring-inner">
               <strong>{data.stats.completionRate}%</strong>
               <span>完成度</span>

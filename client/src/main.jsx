@@ -8,6 +8,7 @@ import './styles-views.css';
 import './styles-overlays.css';
 import './styles-features.css';
 import './styles-responsive.css';
+import './styles-apple-home.css';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
