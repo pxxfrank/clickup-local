@@ -1,0 +1,1237 @@
+/* Readability and sizing pass for the global Apple-style interface.
+   Target: comfortable at browser zoom 100% on a 1440–1600px desktop. */
+
+:root {
+  --text-caption: 11.5px;
+  --text-meta: 12px;
+  --text-small: 12.5px;
+  --text-body: 14px;
+  --text-control: 13.5px;
+  --text-title: 17px;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+button,
+input,
+textarea,
+select {
+  font-size: 14px;
+}
+
+/* ---------- Chrome ---------- */
+
+.app-shell .sidebar {
+  width: 272px;
+}
+
+.sidebar-head {
+  height: 62px;
+}
+
+.brand-name {
+  font-size: 20px;
+}
+
+.brand-badge {
+  font-size: 11px;
+  padding: 2px 7px;
+}
+
+.ws-switcher-btn {
+  min-height: 48px;
+  padding: 9px 10px;
+}
+
+.ws-switcher-text strong {
+  font-size: 14px;
+}
+
+.ws-switcher-text span {
+  font-size: 12px;
+}
+
+.ws-avatar {
+  width: 32px;
+  height: 32px;
+}
+
+.sidebar-search,
+.sidebar-nav {
+  height: 36px;
+  font-size: 13.5px;
+  border-radius: 9px;
+}
+
+.sidebar-search kbd {
+  font-size: 10.5px;
+}
+
+.nav-badge {
+  min-width: 19px;
+  height: 18px;
+  font-size: 10.5px;
+}
+
+.sidebar-section-head {
+  padding: 13px 9px 6px;
+  font-size: 12px;
+}
+
+.tree-space-main,
+.tree-folder-main,
+.tree-list-main,
+.tree-label,
+.sidebar-doc {
+  font-size: 13px;
+}
+
+.tree-space-main,
+.tree-folder-main,
+.tree-list-main {
+  height: 34px;
+}
+
+.tree-count {
+  min-width: 19px;
+  padding: 2px 5px;
+  font-size: 10.5px;
+}
+
+.list-emoji {
+  width: 22px;
+  height: 22px;
+  font-size: 15px;
+}
+
+.tree-space-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 15px;
+}
+
+.sidebar-foot {
+  padding: 12px 13px 14px;
+}
+
+.invite-btn {
+  height: 36px;
+  font-size: 13px;
+}
+
+.sidebar-user {
+  padding: 6px 7px;
+}
+
+.sidebar-user-text strong {
+  font-size: 13px;
+}
+
+.sidebar-user-text span {
+  font-size: 11.5px;
+}
+
+.sidebar-version {
+  font-size: 10.5px;
+}
+
+.topbar {
+  height: 60px;
+  padding: 0 22px;
+}
+
+.breadcrumbs,
+.crumb-link {
+  font-size: 13px;
+}
+
+.topbar-search {
+  height: 34px;
+  padding: 0 11px;
+  font-size: 13px;
+}
+
+.topbar-search kbd {
+  font-size: 10.5px;
+}
+
+.topbar-new {
+  height: 34px;
+  padding: 0 13px;
+  font-size: 13px;
+  border-radius: 999px;
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+}
+
+/* ---------- Menus and popovers ---------- */
+
+.popover-menu {
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 12px;
+}
+
+.menu-item {
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 13.5px;
+  border-radius: 8px;
+}
+
+.menu-item-icon {
+  width: 22px;
+}
+
+.menu-item-hint {
+  font-size: 11.5px;
+}
+
+.menu-label {
+  padding: 9px 10px 6px;
+  font-size: 11.5px;
+}
+
+.ui-select {
+  height: 38px;
+  padding: 0 11px;
+  font-size: 13.5px;
+  border-radius: 9px;
+}
+
+.ui-select.input {
+  height: 40px;
+  font-size: 14px;
+}
+
+.ui-select.mini-select {
+  height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.ui-select-option {
+  min-height: 36px;
+  padding: 7px 9px;
+  font-size: 13px;
+  border-radius: 7px;
+}
+
+.ui-select-option-hint {
+  font-size: 11px;
+}
+
+.ui-select-menu {
+  min-width: 220px;
+}
+
+.ui-date {
+  height: 40px;
+  padding: 0 11px;
+  font-size: 13.5px;
+}
+
+.ui-date-value {
+  line-height: 1.3;
+}
+
+.ui-date-clear {
+  width: 21px;
+  height: 21px;
+}
+
+.date-panel {
+  min-width: 292px;
+}
+
+.date-field span {
+  font-size: 12.5px;
+}
+
+.date-field .ui-date.date-panel-input {
+  height: 33px;
+  font-size: 12.5px;
+}
+
+.date-quick button {
+  min-height: 30px;
+  font-size: 12.5px;
+}
+
+.date-clear {
+  min-height: 32px;
+  font-size: 12.5px;
+}
+
+.dependency-graph-empty {
+  padding: 24px;
+}
+
+.dependency-graph-empty h3 {
+  font-size: 15px;
+}
+
+.dependency-graph-empty p,
+.dependency-graph-legend {
+  font-size: 12px;
+}
+
+.home-stat-task-row {
+  min-height: 52px;
+  padding: 9px 10px;
+}
+
+.home-stat-task-main strong {
+  font-size: 13.5px;
+}
+
+.home-stat-task-main > span,
+.home-stat-task-meta {
+  font-size: 11.5px;
+}
+
+/* ---------- Buttons, forms, tabs ---------- */
+
+.btn {
+  min-height: 36px;
+  padding: 0 13px;
+  font-size: 13.5px;
+  border-radius: 10px;
+}
+
+.btn-sm {
+  min-height: 32px;
+  padding: 0 11px;
+  font-size: 13px;
+}
+
+.btn-xs {
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.btn-lg {
+  min-height: 46px;
+  font-size: 14.5px;
+}
+
+.input,
+.textarea {
+  height: 40px;
+  padding: 0 12px;
+  font-size: 14px;
+  border-radius: 9px;
+}
+
+.textarea {
+  padding: 10px 12px;
+  line-height: 1.6;
+}
+
+.mini-select {
+  height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.field {
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 13px;
+}
+
+.form-error {
+  font-size: 13px;
+}
+
+.view-tab {
+  height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.toolbar-btn {
+  height: 34px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+
+.inline-search {
+  height: 34px;
+}
+
+.inline-search input {
+  width: 130px;
+  font-size: 12.5px;
+}
+
+.view-toolbar {
+  gap: 6px;
+}
+
+/* ---------- Page headings and cards ---------- */
+
+.panel-head h2 {
+  font-size: 18px;
+}
+
+.panel-head p {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.panel-link {
+  font-size: 12.5px;
+}
+
+.panel-badge,
+.week-total {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+
+.home-date {
+  font-size: 13px;
+}
+
+.home-hero-main > p {
+  font-size: 15px;
+}
+
+.home-hero-actions .btn {
+  height: 40px;
+  font-size: 13.5px;
+}
+
+.home-hero-focus {
+  width: 238px;
+  padding: 20px 21px;
+}
+
+.hero-focus-head {
+  font-size: 12px;
+}
+
+.hero-ring {
+  width: 106px;
+  height: 106px;
+}
+
+.hero-ring-inner strong {
+  font-size: 28px;
+}
+
+.hero-ring-inner span {
+  font-size: 10.5px;
+}
+
+.hero-focus-foot {
+  font-size: 11px;
+}
+
+.stat-card {
+  min-height: 154px;
+  padding: 21px 21px 19px;
+}
+
+.stat-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+
+.stat-label {
+  font-size: 13.5px;
+}
+
+.stat-value {
+  font-size: 36px;
+}
+
+.stat-hint {
+  font-size: 12px;
+}
+
+.home-schedule-head {
+  padding: 21px 23px;
+}
+
+.home-schedule-count {
+  font-size: 11.5px;
+}
+
+.home-schedule-toggle button {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.home-schedule-body .calendar-view {
+  font-size: 13px;
+}
+
+.home-grid {
+  gap: 18px;
+}
+
+.my-task-row {
+  min-height: 50px;
+  padding: 12px 11px;
+}
+
+.my-task-name {
+  font-size: 13.5px;
+}
+
+.my-task-list-name {
+  font-size: 11.5px;
+}
+
+.week-bar-value,
+.week-bar-label {
+  font-size: 11px;
+}
+
+.weekly-summary {
+  font-size: 11.5px;
+}
+
+.workload-row {
+  min-height: 34px;
+  font-size: 12.5px;
+}
+
+.home-activity-row {
+  padding: 9px 7px;
+}
+
+.home-activity-row p {
+  font-size: 13px;
+}
+
+.home-activity-row > div > span {
+  font-size: 11px;
+}
+
+/* ---------- List and board ---------- */
+
+.list-header-inner {
+  padding-top: 20px;
+}
+
+.list-title-line h1 {
+  font-size: 27px;
+}
+
+.list-description {
+  font-size: 12.5px;
+}
+
+.list-progress-count {
+  font-size: 11.5px;
+}
+
+.list-progress-block {
+  width: 150px;
+}
+
+.group-head {
+  min-height: 38px;
+  padding: 4px 5px;
+  font-size: 13px;
+}
+
+.group-name {
+  font-size: 13px;
+}
+
+.group-count {
+  font-size: 11px;
+}
+
+.task-group-body {
+  border-radius: 11px;
+}
+
+.task-row {
+  min-height: 50px;
+  padding: 6px 12px 6px 8px;
+}
+
+.task-name,
+.task-row .task-name {
+  font-size: 14px;
+}
+
+.task-subline,
+.task-row-meta,
+.task-row-date {
+  font-size: 11.5px;
+}
+
+.task-check {
+  width: 18px;
+  height: 18px;
+}
+
+.inline-add-trigger,
+.inline-add-row {
+  min-height: 34px;
+  font-size: 12.5px;
+}
+
+.status-mini {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+
+.board-card {
+  padding: 13px 13px 12px;
+}
+
+.board-card-title,
+.board-card strong {
+  font-size: 13px;
+}
+
+.board-card-tags,
+.board-card-meta {
+  font-size: 11px;
+}
+
+.board-status-name {
+  font-size: 12.5px;
+}
+
+.board-column-head {
+  min-height: 44px;
+}
+
+/* ---------- Calendar and Gantt ---------- */
+
+.calendar-toolbar {
+  min-height: 48px;
+  padding: 9px 13px;
+}
+
+.calendar-toolbar button,
+.calendar-toolbar span {
+  font-size: 12.5px;
+}
+
+.calendar-weekdays {
+  min-height: 34px;
+  font-size: 12px;
+}
+
+.calendar-day-num {
+  font-size: 12.5px;
+}
+
+.calendar-task {
+  min-height: 22px;
+  font-size: 11px;
+}
+
+.calendar-day-add {
+  font-size: 15px;
+}
+
+.calendar-selected-row {
+  min-height: 42px;
+  font-size: 12.5px;
+}
+
+.gantt-label-head span:first-child {
+  font-size: 12.5px;
+}
+
+.gantt-day-head,
+.gantt-month {
+  font-size: 10.5px;
+}
+
+.gantt-label-name {
+  font-size: 12.5px;
+}
+
+.gantt-bar-label {
+  font-size: 11px;
+}
+
+.gantt-bar {
+  height: 26px;
+  top: 7px;
+}
+
+.gantt-row {
+  height: 44px;
+}
+
+/* ---------- Task drawer / modals ---------- */
+
+.drawer-head {
+  min-height: 60px;
+  padding: 13px 18px;
+}
+
+.drawer-title {
+  font-size: 27px;
+  line-height: 1.25;
+}
+
+.drawer-breadcrumb,
+.drawer-subtitle {
+  font-size: 12.5px;
+}
+
+.quick-pill {
+  min-height: 34px;
+  padding: 0 11px;
+  font-size: 12.5px;
+}
+
+.drawer-tabs {
+  font-size: 13px;
+}
+
+.drawer-tabs button {
+  padding: 9px 2px;
+}
+
+.drawer-section-head h3 {
+  font-size: 14px;
+}
+
+.drawer-section-head .section-count {
+  font-size: 11.5px;
+}
+
+.drawer-field-label,
+.drawer-field .field-input {
+  font-size: 12.5px;
+}
+
+.drawer-section p,
+.drawer-section li,
+.comment-body {
+  font-size: 13px;
+}
+
+.description-textarea,
+.markdown-editor .markdown-wysiwyg {
+  font-size: 13.5px;
+}
+
+.milestone-desc,
+.phase-row-main span,
+.overview-stat > span:not(.overview-stat-foot),
+.overview-stat-foot {
+  font-size: 11.5px;
+}
+
+.modal-head {
+  padding: 20px 22px 15px;
+}
+
+.modal-head h3 {
+  font-size: 21px;
+}
+
+.modal-head p {
+  font-size: 12.5px;
+}
+
+.modal-body {
+  font-size: 13.5px;
+}
+
+.modal-footer {
+  padding: 14px 20px;
+}
+
+.modal-footer .btn {
+  min-height: 38px;
+  font-size: 13.5px;
+}
+
+.create-task-name {
+  font-size: 22px;
+}
+
+.create-task-name::placeholder {
+  font-size: 20px;
+}
+
+.create-prop {
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 9px;
+}
+
+.create-prop > span {
+  font-size: 12px;
+}
+
+.create-prop .ui-select,
+.create-prop .ui-date {
+  height: 36px;
+  font-size: 12.5px;
+}
+
+.create-prop .ui-select-value {
+  font-size: 12.5px;
+}
+
+.create-task-hint {
+  font-size: 11.5px;
+}
+
+.create-more-toggle {
+  font-size: 12.5px;
+}
+
+.settings-tabs button,
+.settings-nav button {
+  min-height: 40px;
+  font-size: 13px;
+}
+
+.settings-pane,
+.settings-form {
+  font-size: 13px;
+}
+
+.settings-hint,
+.settings-empty,
+.settings-tab-count {
+  font-size: 12px;
+}
+
+.status-setting-name,
+.field-setting-name,
+.contact-setting-name,
+.automation-row {
+  font-size: 13px;
+}
+
+/* ---------- Overview and timeline ---------- */
+
+.overview-hero {
+  padding: 23px 24px;
+}
+
+.overview-hero-main h2 {
+  font-size: 27px;
+}
+
+.overview-hero-main p {
+  font-size: 12.5px;
+}
+
+.overview-stat {
+  padding: 16px 16px 15px;
+}
+
+.overview-stat-top {
+  font-size: 12px;
+}
+
+.overview-stat > strong {
+  font-size: 27px;
+}
+
+.overview-stat-foot {
+  margin-top: 13px;
+}
+
+.overview-card-head h3 {
+  font-size: 16px;
+}
+
+.overview-card-head p {
+  font-size: 12px;
+}
+
+.key-action-row {
+  min-height: 48px;
+  padding: 9px 11px;
+}
+
+.key-action-main strong {
+  font-size: 13px;
+}
+
+.key-action-main span,
+.key-action-date,
+.key-action-empty {
+  font-size: 12px;
+}
+
+.phase-row {
+  min-height: 44px;
+  padding: 8px 10px;
+}
+
+.phase-row-main strong {
+  font-size: 13px;
+}
+
+.phase-row-main span,
+.phase-row-main em {
+  font-size: 11.5px;
+}
+
+.overview-task-row {
+  min-height: 42px;
+  font-size: 13px;
+}
+
+.vtimeline-columns {
+  font-size: 11px;
+}
+
+.vtimeline-phase-rail strong {
+  font-size: 12.5px;
+}
+
+.vtimeline-phase-rail span,
+.vtimeline-phase-rail em {
+  font-size: 10.5px;
+}
+
+.vtimeline-date strong {
+  font-size: 12.5px;
+}
+
+.vtimeline-date span {
+  font-size: 10px;
+}
+
+.vtimeline-ms {
+  padding: 9px 10px;
+}
+
+.vtimeline-ms-top strong {
+  font-size: 12.5px;
+}
+
+.vtimeline-ms-meta {
+  font-size: 10.5px;
+}
+
+.vtimeline-ms-desc {
+  font-size: 11px;
+}
+
+.vtimeline-ms-keyactions {
+  font-size: 10.5px;
+}
+
+.vtimeline-task {
+  min-height: 42px;
+  padding: 8px 10px;
+}
+
+.vtimeline-task-main strong {
+  font-size: 12.5px;
+}
+
+.vtimeline-task-main span {
+  font-size: 10.5px;
+}
+
+/* ---------- Inbox, portfolio, docs, meetings ---------- */
+
+.inbox-head h1,
+.portfolio-hero h1,
+.meetings-head h1 {
+  font-size: 28px;
+}
+
+.inbox-head p,
+.portfolio-hero p,
+.meetings-head p {
+  font-size: 12.5px;
+}
+
+.inbox-tabs button {
+  min-height: 38px;
+  font-size: 12.5px;
+}
+
+.inbox-item {
+  min-height: 54px;
+  padding: 11px 12px;
+}
+
+.inbox-item-main {
+  font-size: 13px;
+}
+
+.inbox-item-meta {
+  font-size: 11px;
+}
+
+.inbox-side-card {
+  padding: 18px;
+}
+
+.inbox-side-card h4 {
+  font-size: 15px;
+}
+
+.portfolio-stat {
+  padding: 16px 17px;
+}
+
+.portfolio-stat strong {
+  font-size: 28px;
+}
+
+.portfolio-stat span,
+.portfolio-stat em {
+  font-size: 11.5px;
+}
+
+.portfolio-card {
+  padding: 16px 17px;
+}
+
+.portfolio-card-title h3 {
+  font-size: 15px;
+}
+
+.portfolio-card-title p,
+.portfolio-card-stats,
+.portfolio-card-foot {
+  font-size: 11.5px;
+}
+
+.portfolio-search {
+  height: 38px;
+}
+
+.portfolio-search input {
+  font-size: 13px;
+}
+
+.portfolio-filter {
+  min-height: 34px;
+  padding: 0 11px;
+  font-size: 12.5px;
+}
+
+.doc-toolbar-top {
+  min-height: 48px;
+  font-size: 12.5px;
+}
+
+.doc-inner {
+  font-size: 14px;
+}
+
+.doc-title-input {
+  font-size: 30px;
+}
+
+.doc-meta,
+.doc-foot {
+  font-size: 11.5px;
+}
+
+.doc-content,
+.doc-markdown-editor {
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.doc-content h1 { font-size: 30px; }
+.doc-content h2 { font-size: 23px; }
+.doc-content h3 { font-size: 19px; }
+.doc-content h4 { font-size: 16px; }
+
+.meeting-card {
+  padding: 18px;
+}
+
+.meeting-card-title h3 {
+  font-size: 16px;
+}
+
+.meeting-card-meta,
+.meeting-card-goals {
+  font-size: 12px;
+}
+
+.meeting-card-foot {
+  font-size: 11.5px;
+}
+
+/* ---------- Timeline/journal cards ---------- */
+
+.journal-head h2 {
+  font-size: 20px;
+}
+
+.journal-head p,
+.journal-toolbar,
+.journal-filters button,
+.journal-note-head span,
+.journal-item-meta,
+.journal-progress-body,
+.journal-activity,
+.journal-time,
+.journal-edited {
+  font-size: 12px;
+}
+
+.journal-note-head strong {
+  font-size: 14px;
+}
+
+.journal-note-body {
+  font-size: 13px;
+}
+
+.journal-kind,
+.journal-linked-tasks button,
+.journal-pinned-section > h3 {
+  font-size: 10.5px;
+}
+
+/* ---------- Login ---------- */
+
+.login-heading h2 {
+  font-size: 30px;
+}
+
+.login-heading p {
+  font-size: 14px;
+}
+
+.login-form .field-label {
+  font-size: 13px;
+}
+
+.input-with-icon input {
+  height: 46px;
+  font-size: 14px;
+}
+
+.login-switch,
+.login-demo-help,
+.login-local-note {
+  font-size: 12.5px;
+}
+
+.login-demo-help code,
+.login-local-note code {
+  font-size: 11.5px;
+}
+
+/* ---------- Utility fallback for compact captions ---------- */
+
+:where(
+  [class$="-meta"],
+  [class$="-hint"],
+  [class$="-caption"],
+  [class$="-foot"],
+  [class*="-meta "],
+  [class*="-hint "]
+) {
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+:where([class$="-badge"], [class$="-count"]) {
+  font-size: 10.5px;
+}
+
+@media (max-width: 1180px) {
+  .view-bar {
+    align-items: flex-start;
+  }
+
+  .view-tabs {
+    flex: 1 0 100%;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .view-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .view-tab {
+    flex: none;
+    gap: 4px;
+    padding: 0 7px;
+    font-size: 12px;
+  }
+
+  .list-title-row {
+    flex-wrap: wrap;
+  }
+
+  .list-header-right {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 1280px) {
+  .app-shell .sidebar {
+    width: 252px;
+  }
+
+  .home-hero-focus {
+    width: 220px;
+  }
+
+  .stat-card {
+    min-height: 146px;
+  }
+
+  .task-row {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell .sidebar {
+    width: 264px;
+  }
+
+  .panel-head h2 {
+    font-size: 17px;
+  }
+
+  .home-hero h1 {
+    font-size: 30px;
+  }
+
+  .drawer-title {
+    font-size: 23px;
+  }
+
+  .vtimeline-columns {
+    font-size: 10.5px;
+  }
+}

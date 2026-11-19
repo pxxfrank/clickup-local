@@ -10,6 +10,7 @@ import './styles-features.css';
 import './styles-responsive.css';
 import './styles-apple-home.css';
 import './styles-apple-theme.css';
+import './styles-apple-typography.css';
 
 const savedTheme = localStorage.getItem('clickup-theme');
 const initialTheme =
