@@ -345,7 +345,7 @@ export default function Sidebar({ open, onClose }) {
           <button type="button" className="sidebar-search" onClick={openSearch}>
             <Search size={16} />
             <span>搜索</span>
-            <kbd>⌘ K</kbd>
+            <kbd>Ctrl K</kbd>
           </button>
           <button type="button" className={`sidebar-nav ${route.type === 'home' ? 'is-active' : ''}`} onClick={() => navigate('/home')}>
             <Home size={17} />
@@ -584,7 +584,7 @@ export default function Sidebar({ open, onClose }) {
               <Settings size={16} />
             </IconButton>
           </div>
-          <div className="sidebar-version">ClickUp Local v1.23.0 · 数据保存在本机</div>
+          <div className="sidebar-version">ClickUp Local v1.24.0 · 数据保存在本机</div>
         </div>
       </aside>
 

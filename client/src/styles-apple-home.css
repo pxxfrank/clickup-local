@@ -1,8 +1,8 @@
 /* Apple-inspired homepage preview. Scoped to the home screen so the rest of
    the product keeps its existing visual language. */
 
-.page-scroll:has(.apple-home),
-.main-area:has(.apple-home) {
+.page-scroll,
+.main-area {
   background: #f5f5f7;
 }
 
@@ -462,246 +462,246 @@
 
 /* Keep the chrome surrounding the home screen in the same light, quiet
    material language as the dashboard cards. */
-.app-shell:has(.apple-home) .sidebar {
+.app-shell .sidebar {
   color: #515154;
   background: rgba(242, 242, 247, 0.94);
   border-right: 1px solid rgba(60, 60, 67, 0.1);
   backdrop-filter: blur(30px) saturate(180%);
 }
 
-.app-shell:has(.apple-home) .logo-mark {
+.app-shell .logo-mark {
   background: linear-gradient(145deg, #64b5ff 0%, #0071e3 58%, #0062c4 100%);
   box-shadow: 0 4px 12px rgba(0, 113, 227, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
-.app-shell:has(.apple-home) .brand-name {
+.app-shell .brand-name {
   color: #1d1d1f;
 }
 
-.app-shell:has(.apple-home) .brand-badge {
+.app-shell .brand-badge {
   color: #0066cc;
   background: rgba(0, 113, 227, 0.09);
   border-color: rgba(0, 113, 227, 0.12);
 }
 
-.app-shell:has(.apple-home) .sidebar-close,
-.app-shell:has(.apple-home) .sidebar-collapse-desktop {
+.app-shell .sidebar-close,
+.app-shell .sidebar-collapse-desktop {
   color: #86868b;
 }
 
-.app-shell:has(.apple-home) .ws-switcher-btn {
+.app-shell .ws-switcher-btn {
   border: 1px solid rgba(60, 60, 67, 0.07);
   background: rgba(255, 255, 255, 0.7);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.025);
 }
 
-.app-shell:has(.apple-home) .ws-switcher-btn:hover {
+.app-shell .ws-switcher-btn:hover {
   background: #fff;
 }
 
-.app-shell:has(.apple-home) .ws-switcher-btn > svg {
+.app-shell .ws-switcher-btn > svg {
   color: #86868b;
 }
 
-.app-shell:has(.apple-home) .ws-switcher-text strong {
+.app-shell .ws-switcher-text strong {
   color: #1d1d1f;
 }
 
-.app-shell:has(.apple-home) .ws-switcher-text span {
+.app-shell .ws-switcher-text span {
   color: #86868b;
 }
 
-.app-shell:has(.apple-home) .sidebar-search {
+.app-shell .sidebar-search {
   color: #6e6e73;
   border: 1px solid rgba(60, 60, 67, 0.065);
   background: rgba(255, 255, 255, 0.55);
 }
 
-.app-shell:has(.apple-home) .sidebar-search:hover {
+.app-shell .sidebar-search:hover {
   color: #1d1d1f;
   background: #fff;
 }
 
-.app-shell:has(.apple-home) .sidebar-search kbd {
+.app-shell .sidebar-search kbd {
   color: #86868b;
   background: rgba(60, 60, 67, 0.055);
   border-color: rgba(60, 60, 67, 0.065);
 }
 
-.app-shell:has(.apple-home) .sidebar-nav {
+.app-shell .sidebar-nav {
   color: #515154;
 }
 
-.app-shell:has(.apple-home) .sidebar-nav:hover {
+.app-shell .sidebar-nav:hover {
   color: #1d1d1f;
   background: rgba(60, 60, 67, 0.055);
 }
 
-.app-shell:has(.apple-home) .sidebar-nav.is-active {
+.app-shell .sidebar-nav.is-active {
   color: #0066cc;
   background: rgba(0, 113, 227, 0.11);
 }
 
-.app-shell:has(.apple-home) .nav-badge {
+.app-shell .nav-badge {
   color: #fff;
   background: #0071e3;
 }
 
-.app-shell:has(.apple-home) .sidebar-section-head {
+.app-shell .sidebar-section-head {
   color: #86868b;
 }
 
-.app-shell:has(.apple-home) .sidebar-section-head .icon-btn {
+.app-shell .sidebar-section-head .icon-btn {
   color: #86868b;
 }
 
-.app-shell:has(.apple-home) .sidebar-section-head .icon-btn:hover {
+.app-shell .sidebar-section-head .icon-btn:hover {
   color: #1d1d1f;
   background: rgba(60, 60, 67, 0.06);
 }
 
-.app-shell:has(.apple-home) .tree-space-row,
-.app-shell:has(.apple-home) .tree-folder-row,
-.app-shell:has(.apple-home) .tree-list-row,
-.app-shell:has(.apple-home) .sidebar-doc {
+.app-shell .tree-space-row,
+.app-shell .tree-folder-row,
+.app-shell .tree-list-row,
+.app-shell .sidebar-doc {
   color: #515154;
 }
 
-.app-shell:has(.apple-home) .tree-space-row:hover,
-.app-shell:has(.apple-home) .tree-folder-row:hover,
-.app-shell:has(.apple-home) .tree-list-row:hover,
-.app-shell:has(.apple-home) .sidebar-doc:hover {
+.app-shell .tree-space-row:hover,
+.app-shell .tree-folder-row:hover,
+.app-shell .tree-list-row:hover,
+.app-shell .sidebar-doc:hover {
   color: #1d1d1f;
   background: rgba(60, 60, 67, 0.055);
 }
 
-.app-shell:has(.apple-home) .tree-space-main,
-.app-shell:has(.apple-home) .tree-folder-main,
-.app-shell:has(.apple-home) .tree-list-main,
-.app-shell:has(.apple-home) .tree-label {
+.app-shell .tree-space-main,
+.app-shell .tree-folder-main,
+.app-shell .tree-list-main,
+.app-shell .tree-label {
   color: #515154;
 }
 
-.app-shell:has(.apple-home) .tree-space-main:hover,
-.app-shell:has(.apple-home) .tree-folder-main:hover,
-.app-shell:has(.apple-home) .tree-list-main:hover {
+.app-shell .tree-space-main:hover,
+.app-shell .tree-folder-main:hover,
+.app-shell .tree-list-main:hover {
   color: #1d1d1f;
 }
 
-.app-shell:has(.apple-home) .tree-chevron,
-.app-shell:has(.apple-home) .tree-more,
-.app-shell:has(.apple-home) .folder-icon,
-.app-shell:has(.apple-home) .sidebar-doc svg {
+.app-shell .tree-chevron,
+.app-shell .tree-more,
+.app-shell .folder-icon,
+.app-shell .sidebar-doc svg {
   color: #86868b;
 }
 
-.app-shell:has(.apple-home) .tree-list-row.is-active {
+.app-shell .tree-list-row.is-active {
   background: rgba(0, 113, 227, 0.11);
 }
 
-.app-shell:has(.apple-home) .tree-list-row.is-active .tree-list-main {
+.app-shell .tree-list-row.is-active .tree-list-main {
   color: #0066cc;
 }
 
-.app-shell:has(.apple-home) .tree-count {
+.app-shell .tree-count {
   color: #6e6e73;
   background: rgba(60, 60, 67, 0.055);
 }
 
-.app-shell:has(.apple-home) .sidebar-doc.is-active {
+.app-shell .sidebar-doc.is-active {
   color: #0066cc;
   background: rgba(0, 113, 227, 0.11);
 }
 
-.app-shell:has(.apple-home) .sidebar-doc-empty {
+.app-shell .sidebar-doc-empty {
   color: #a1a1a6;
 }
 
-.app-shell:has(.apple-home) .invite-btn {
+.app-shell .invite-btn {
   color: #515154;
   border-color: rgba(60, 60, 67, 0.12);
   background: rgba(255, 255, 255, 0.52);
 }
 
-.app-shell:has(.apple-home) .invite-btn:hover {
+.app-shell .invite-btn:hover {
   color: #1d1d1f;
   border-color: rgba(60, 60, 67, 0.18);
   background: #fff;
 }
 
-.app-shell:has(.apple-home) .sidebar-user:hover {
+.app-shell .sidebar-user:hover {
   background: rgba(60, 60, 67, 0.055);
 }
 
-.app-shell:has(.apple-home) .sidebar-user-text strong {
+.app-shell .sidebar-user-text strong {
   color: #1d1d1f;
 }
 
-.app-shell:has(.apple-home) .sidebar-user-text span {
+.app-shell .sidebar-user-text span {
   color: #86868b;
 }
 
-.app-shell:has(.apple-home) .sidebar-user-row .icon-btn {
+.app-shell .sidebar-user-row .icon-btn {
   color: #86868b;
 }
 
-.app-shell:has(.apple-home) .sidebar-user-row .icon-btn:hover {
+.app-shell .sidebar-user-row .icon-btn:hover {
   color: #1d1d1f;
   background: rgba(60, 60, 67, 0.06);
 }
 
-.app-shell:has(.apple-home) .sidebar-version {
+.app-shell .sidebar-version {
   color: #a1a1a6;
 }
 
-.app-shell:has(.apple-home) .topbar {
+.app-shell .topbar {
   border-bottom: 1px solid rgba(60, 60, 67, 0.08);
   background: rgba(255, 255, 255, 0.76);
   backdrop-filter: blur(22px) saturate(180%);
 }
 
-.app-shell:has(.apple-home) .topbar-search {
+.app-shell .topbar-search {
   color: #6e6e73;
   border: 1px solid rgba(60, 60, 67, 0.065);
   border-radius: 999px;
   background: rgba(60, 60, 67, 0.045);
 }
 
-.app-shell:has(.apple-home) .topbar-search:hover {
+.app-shell .topbar-search:hover {
   color: #1d1d1f;
   border-color: rgba(60, 60, 67, 0.09);
   background: rgba(60, 60, 67, 0.06);
 }
 
-.app-shell:has(.apple-home) .topbar-search kbd {
+.app-shell .topbar-search kbd {
   color: #86868b;
   background: rgba(255, 255, 255, 0.56);
   border-color: rgba(60, 60, 67, 0.08);
 }
 
-.app-shell:has(.apple-home) .topbar-new {
+.app-shell .topbar-new {
   color: #fff;
   background: #0071e3;
   border-radius: 999px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.app-shell:has(.apple-home) .topbar-new:hover {
+.app-shell .topbar-new:hover {
   background: #0066cc;
 }
 
-.app-shell:has(.apple-home) .breadcrumbs {
+.app-shell .breadcrumbs {
   color: #86868b;
 }
 
-.app-shell:has(.apple-home) .breadcrumbs a:hover,
-.app-shell:has(.apple-home) .breadcrumbs button:hover {
+.app-shell .breadcrumbs a:hover,
+.app-shell .breadcrumbs button:hover {
   color: #1d1d1f;
 }
 
-.app-shell:has(.apple-home) .topbar-icon-only,
-.app-shell:has(.apple-home) .topbar-bell,
-.app-shell:has(.apple-home) .topbar-help {
+.app-shell .topbar-icon-only,
+.app-shell .topbar-bell,
+.app-shell .topbar-help {
   color: #6e6e73;
 }
 

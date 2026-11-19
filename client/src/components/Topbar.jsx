@@ -6,9 +6,11 @@ import {
   HelpCircle,
   LogOut,
   Menu,
+  Moon,
   Plus,
   Search,
   Settings,
+  Sun,
   UserPlus,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.js';
@@ -16,7 +18,7 @@ import { findDoc, findList } from '../lib/tree.js';
 import { Avatar, IconButton, MenuDivider, MenuItem, Popover } from './ui.jsx';
 
 export default function Topbar({ onOpenSidebar }) {
-  const { bootstrap, route, navigate, openSearch, openCreateTask, openSettings, logout, toast } = useApp();
+  const { bootstrap, route, navigate, openSearch, openCreateTask, openSettings, logout, toast, theme, toggleTheme } = useApp();
   const [helpOpen, setHelpOpen] = useState(false);
   const listInfo = route.type === 'list' ? findList(bootstrap?.spaces, route.id) : null;
   const doc = route.type === 'doc' ? findDoc(bootstrap?.docs, route.id) : null;
@@ -81,7 +83,7 @@ export default function Topbar({ onOpenSidebar }) {
         <button type="button" className="topbar-search" onClick={openSearch}>
           <Search size={15} />
           <span>搜索</span>
-          <kbd>⌘ K</kbd>
+          <kbd>Ctrl K</kbd>
         </button>
         <IconButton label="搜索" className="topbar-icon-only" onClick={openSearch}>
           <Search size={18} />
@@ -90,6 +92,13 @@ export default function Topbar({ onOpenSidebar }) {
           <Plus size={15} />
           <span>新建任务</span>
         </button>
+        <IconButton
+          label={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+          className="theme-toggle"
+          onClick={toggleTheme}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </IconButton>
         <div className="topbar-divider" />
         <IconButton label="收件箱通知" className="topbar-bell" onClick={() => navigate('/inbox')}>
           <Bell size={18} />
@@ -140,7 +149,7 @@ export default function Topbar({ onOpenSidebar }) {
                 <strong>快捷操作</strong>
                 <button type="button" onClick={() => setHelpOpen(false)}>关闭</button>
               </div>
-              <div className="help-row"><span>全局搜索</span><kbd>⌘ K</kbd></div>
+              <div className="help-row"><span>全局搜索</span><kbd>Ctrl K</kbd></div>
               <div className="help-row"><span>新建任务</span><kbd>N</kbd></div>
               <div className="help-row"><span>关闭弹窗</span><kbd>Esc</kbd></div>
               <div className="help-note">所有数据保存在本机，可在「数据目录」中备份。</div>

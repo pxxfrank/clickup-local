@@ -29,6 +29,7 @@ export default function App() {
   const [createDefaults, setCreateDefaults] = useState(null);
   const [dataVersion, setDataVersion] = useState(0);
   const [toasts, setToasts] = useState([]);
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'light');
   const bootstrapRef = useRef(null);
   const toastTimers = useRef(new Map());
 
@@ -105,6 +106,11 @@ export default function App() {
   }, [route.type, route.task]);
 
   useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('clickup-theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
     function onUnauthorized() {
       setBootstrap(null);
       setAuthLoading(false);
@@ -136,6 +142,7 @@ export default function App() {
     [route]
   );
   const openSettings = useCallback((tab = 'profile') => setSettingsTab(tab), []);
+  const toggleTheme = useCallback(() => setTheme((current) => (current === 'dark' ? 'light' : 'dark')), []);
 
   const refresh = useCallback(
     async ({ withBootstrap = true } = {}) => {
@@ -234,6 +241,8 @@ export default function App() {
       refresh,
       refreshBootstrap: refresh,
       dataVersion,
+      theme,
+      toggleTheme,
       toast,
       openTask,
       closeTask,
@@ -243,7 +252,7 @@ export default function App() {
       switchWorkspace,
       logout,
     }),
-    [bootstrap, route, navigate, refresh, dataVersion, toast, openTask, closeTask, openCreateTask, openSettings, switchWorkspace, logout]
+    [bootstrap, route, navigate, refresh, dataVersion, theme, toggleTheme, toast, openTask, closeTask, openCreateTask, openSettings, switchWorkspace, logout]
   );
 
   if (authLoading) return <LoadingScreen label="正在打开你的工作空间…" />;

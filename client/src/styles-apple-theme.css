@@ -1,0 +1,1652 @@
+/* Global Apple-inspired design system: light + dark themes. */
+
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Segoe UI Variable Display", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --app-bg: #f5f5f7;
+  --card: #ffffff;
+  --card-soft: rgba(255, 255, 255, 0.94);
+  --card-2: #f2f2f7;
+  --chrome: rgba(255, 255, 255, 0.78);
+  --brand: #0071e3;
+  --brand-strong: #0066cc;
+  --brand-soft: #e8f1ff;
+  --brand-line: #cfe4ff;
+  --ink: #1d1d1f;
+  --ink-2: #424245;
+  --muted: #6e6e73;
+  --muted-2: #86868b;
+  --line: rgba(60, 60, 67, 0.075);
+  --line-strong: rgba(60, 60, 67, 0.14);
+  --surface: #f5f5f7;
+  --surface-2: #f0f0f3;
+  --green: #34c759;
+  --green-soft: #eafaf0;
+  --red: #ff3b30;
+  --red-soft: #fff0f0;
+  --orange: #ff9500;
+  --orange-soft: #fff4e5;
+  --blue: #0071e3;
+  --blue-soft: #e8f1ff;
+  --purple: #5856d6;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.025);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.16), 0 4px 14px rgba(0, 0, 0, 0.05);
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --app-bg: #000000;
+  --card: #1c1c1e;
+  --card-soft: rgba(28, 28, 30, 0.94);
+  --card-2: #2c2c2e;
+  --chrome: rgba(28, 28, 30, 0.82);
+  --brand: #0a84ff;
+  --brand-strong: #409cff;
+  --brand-soft: rgba(10, 132, 255, 0.16);
+  --brand-line: rgba(10, 132, 255, 0.3);
+  --ink: #f5f5f7;
+  --ink-2: #d1d1d6;
+  --muted: #a1a1a6;
+  --muted-2: #8e8e93;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --green: #30d158;
+  --green-soft: rgba(48, 209, 88, 0.14);
+  --red: #ff453a;
+  --red-soft: rgba(255, 69, 58, 0.14);
+  --orange: #ff9f0a;
+  --orange-soft: rgba(255, 159, 10, 0.14);
+  --blue: #0a84ff;
+  --blue-soft: rgba(10, 132, 255, 0.16);
+  --purple: #bf5af2;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 28px 80px rgba(0, 0, 0, 0.6), 0 4px 14px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--app-bg);
+  color: var(--ink);
+}
+
+.app-shell,
+.main-area,
+.page-scroll {
+  background: var(--app-bg);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 24%, transparent);
+}
+
+/* ---------- Generic surfaces ---------- */
+
+.panel,
+.overview-card,
+.meeting-card,
+.board-card,
+.calendar-view,
+.doc-canvas,
+.inbox-side-card,
+.portfolio-card,
+.retro-card,
+.retro-summary-card,
+.settings-pane,
+.task-drawer,
+.modal,
+.search-modal,
+.search-modal-panel,
+.help-popover,
+.date-panel,
+.ws-menu,
+.popover-menu,
+.ui-select-menu,
+.rich-menu {
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.panel,
+.overview-card,
+.meeting-card,
+.calendar-view,
+.doc-canvas,
+.inbox-side-card,
+.portfolio-card,
+.retro-card,
+.retro-summary-card,
+.settings-pane {
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+
+.modal,
+.task-drawer,
+.search-modal {
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-head,
+.modal-footer,
+.drawer-head,
+.list-header,
+.home-schedule-head,
+.settings-head {
+  border-color: var(--line);
+}
+
+.modal-head h3,
+.drawer-title,
+.list-title-line h1,
+.doc-title-input,
+.settings-head h3 {
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.popover-menu,
+.ui-select-menu,
+.date-panel,
+.help-popover,
+.ws-menu,
+.rich-menu {
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+}
+
+.menu-item,
+.ui-select-option {
+  border-radius: 8px;
+  color: var(--ink-2);
+}
+
+.menu-item:hover,
+.ui-select-option:hover,
+.ui-select-option:focus-visible {
+  background: var(--surface-2);
+}
+
+.menu-item.is-active,
+.ui-select-option.is-active {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
+.menu-divider,
+.drawer-section,
+.settings-divider {
+  border-color: var(--line);
+}
+
+/* ---------- Inputs and buttons ---------- */
+
+.input,
+.textarea,
+.mini-select,
+.ui-select,
+.ui-date,
+.date-field .ui-date.date-panel-input,
+.search-input,
+.inline-search,
+.topbar-search,
+.sidebar-search {
+  border-color: var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.input::placeholder,
+.textarea::placeholder,
+.search-input::placeholder,
+.inline-search input::placeholder {
+  color: var(--muted-2);
+}
+
+.input:focus,
+.textarea:focus,
+.ui-select:focus-visible,
+.ui-date:focus-within,
+.search-input:focus {
+  border-color: var(--brand);
+}
+
+.btn {
+  border-radius: 10px;
+  font-weight: 550;
+}
+
+.btn-primary {
+  background: var(--brand);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--brand-strong);
+}
+
+.btn-ghost {
+  border-color: var(--line-strong);
+  background: var(--card);
+  color: var(--ink-2);
+}
+
+.btn-ghost:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+
+.icon-btn {
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+kbd {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* ---------- Page chrome ---------- */
+
+.list-page,
+.list-content,
+.inbox-page,
+.portfolio-page,
+.doc-page,
+.meetings-view,
+.retro-view,
+.gantt-view,
+.board-view {
+  background: var(--app-bg);
+}
+
+.list-header {
+  border-bottom-color: var(--line);
+  background: var(--chrome);
+  backdrop-filter: blur(22px) saturate(180%);
+}
+
+.list-description,
+.list-description.is-muted,
+.list-progress-count,
+.view-tab,
+.toolbar-btn,
+.inline-search,
+.home-schedule-count {
+  color: var(--muted);
+}
+
+.view-tab:hover {
+  color: var(--ink);
+}
+
+.view-tab.is-active {
+  color: var(--brand-strong);
+  border-bottom-color: var(--brand);
+}
+
+.task-row,
+.board-card,
+.calendar-task,
+.home-timeline-task,
+.inbox-item,
+.calendar-selected-row {
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--ink-2);
+}
+
+.task-row:hover,
+.board-card:hover,
+.calendar-selected-row:hover {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--card) 88%, var(--ink) 3%);
+}
+
+.group-head {
+  color: var(--ink-2);
+  border-color: var(--line);
+}
+
+.group-count,
+.group-add,
+.group-actions,
+.task-row-meta,
+.task-row-date {
+  color: var(--muted-2);
+}
+
+.board-column {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.board-column-head,
+.gantt-head-row,
+.gantt-label,
+.calendar-weekdays,
+.calendar-grid {
+  border-color: var(--line);
+}
+
+.calendar-view,
+.calendar-grid-wrap,
+.calendar-day,
+.calendar-bottom,
+.calendar-selected,
+.calendar-undated,
+.gantt-view,
+.gantt-scroll {
+  border-color: var(--line);
+  background: var(--card);
+}
+
+.calendar-day.is-other {
+  background: var(--surface);
+}
+
+.calendar-day.is-today {
+  background: var(--brand-soft);
+}
+
+.calendar-day-add,
+.calendar-task,
+.calendar-more,
+.calendar-undated,
+.gantt-label,
+.gantt-track,
+.gantt-unscheduled {
+  color: var(--ink-2);
+}
+
+.gantt-bar {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* ---------- Drawer / settings / inbox ---------- */
+
+.task-drawer,
+.modal {
+  background: var(--card);
+}
+
+.drawer-section h3,
+.settings-pane h4,
+.inbox-side-card h4,
+.portfolio-card h3,
+.meeting-card h3 {
+  color: var(--ink);
+}
+
+.drawer-quick-props .quick-pill,
+.drawer-field .field-input,
+.drawer-field .mini-select,
+.settings-form input,
+.settings-form textarea,
+.settings-form select {
+  border-color: var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.quick-pill {
+  border-color: var(--line-strong);
+  background: var(--card);
+  color: var(--ink-2);
+}
+
+.quick-pill:hover {
+  background: var(--surface-2);
+}
+
+.settings-tabs,
+.settings-nav {
+  border-color: var(--line);
+  background: transparent;
+}
+
+.settings-tab.is-active {
+  color: var(--brand-strong);
+  border-color: var(--brand);
+}
+
+.inbox-item:hover {
+  background: var(--surface-2);
+}
+
+.inbox-item-main,
+.inbox-task-name {
+  color: var(--ink-2);
+}
+
+/* ---------- Dark theme detail pass ---------- */
+
+html[data-theme="dark"] .sidebar {
+  color: #a1a1a6;
+  border-right-color: rgba(255, 255, 255, 0.08);
+  background: rgba(28, 28, 30, 0.94);
+}
+
+html[data-theme="dark"] .brand-name,
+html[data-theme="dark"] .ws-switcher-text strong,
+html[data-theme="dark"] .tree-space-main,
+html[data-theme="dark"] .tree-folder-main,
+html[data-theme="dark"] .tree-list-main,
+html[data-theme="dark"] .tree-label,
+html[data-theme="dark"] .sidebar-doc,
+html[data-theme="dark"] .sidebar-user-text strong {
+  color: #f5f5f7;
+}
+
+html[data-theme="dark"] .brand-badge {
+  color: #8ec5ff;
+  border-color: rgba(10, 132, 255, 0.18);
+  background: rgba(10, 132, 255, 0.14);
+}
+
+html[data-theme="dark"] .ws-switcher-btn {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(44, 44, 46, 0.72);
+}
+
+html[data-theme="dark"] .ws-switcher-btn:hover,
+html[data-theme="dark"] .sidebar-nav:hover,
+html[data-theme="dark"] .sidebar-doc:hover,
+html[data-theme="dark"] .tree-row:hover,
+html[data-theme="dark"] .sidebar-user:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+html[data-theme="dark"] .ws-switcher-text span,
+html[data-theme="dark"] .sidebar-section-head,
+html[data-theme="dark"] .sidebar-version,
+html[data-theme="dark"] .tree-chevron,
+html[data-theme="dark"] .tree-more,
+html[data-theme="dark"] .folder-icon {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .sidebar-search {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(44, 44, 46, 0.7);
+  color: #a1a1a6;
+}
+
+html[data-theme="dark"] .sidebar-search:hover {
+  color: #f5f5f7;
+  background: rgba(58, 58, 60, 0.82);
+}
+
+html[data-theme="dark"] .sidebar-nav {
+  color: #a1a1a6;
+}
+
+html[data-theme="dark"] .sidebar-nav.is-active {
+  color: #8ec5ff;
+  background: rgba(10, 132, 255, 0.18);
+}
+
+html[data-theme="dark"] .tree-list-row.is-active {
+  background: rgba(10, 132, 255, 0.18);
+}
+
+html[data-theme="dark"] .tree-list-row.is-active .tree-list-main,
+html[data-theme="dark"] .sidebar-doc.is-active {
+  color: #8ec5ff;
+}
+
+html[data-theme="dark"] .tree-count {
+  color: #a1a1a6;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+html[data-theme="dark"] .invite-btn {
+  color: #d1d1d6;
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(44, 44, 46, 0.6);
+}
+
+html[data-theme="dark"] .invite-btn:hover {
+  color: #fff;
+  background: rgba(58, 58, 60, 0.85);
+}
+
+html[data-theme="dark"] .topbar {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: rgba(28, 28, 30, 0.82);
+}
+
+html[data-theme="dark"] .topbar-search {
+  color: #a1a1a6;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme="dark"] .topbar-search:hover {
+  color: #f5f5f7;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="dark"] .breadcrumbs,
+html[data-theme="dark"] .crumb-link {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .crumb-link:hover {
+  color: #f5f5f7;
+}
+
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .overview-card,
+html[data-theme="dark"] .meeting-card,
+html[data-theme="dark"] .board-card,
+html[data-theme="dark"] .calendar-view,
+html[data-theme="dark"] .doc-canvas,
+html[data-theme="dark"] .inbox-side-card,
+html[data-theme="dark"] .portfolio-card,
+html[data-theme="dark"] .retro-card,
+html[data-theme="dark"] .retro-summary-card,
+html[data-theme="dark"] .settings-pane,
+html[data-theme="dark"] .task-drawer,
+html[data-theme="dark"] .modal,
+html[data-theme="dark"] .search-modal,
+html[data-theme="dark"] .popover-menu,
+html[data-theme="dark"] .ui-select-menu,
+html[data-theme="dark"] .date-panel,
+html[data-theme="dark"] .help-popover,
+html[data-theme="dark"] .ws-menu,
+html[data-theme="dark"] .rich-menu {
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .list-header {
+  border-bottom-color: var(--line);
+  background: var(--chrome);
+}
+
+html[data-theme="dark"] .task-row,
+html[data-theme="dark"] .board-card,
+html[data-theme="dark"] .calendar-task,
+html[data-theme="dark"] .home-timeline-task,
+html[data-theme="dark"] .inbox-item,
+html[data-theme="dark"] .calendar-selected-row {
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .task-row:hover,
+html[data-theme="dark"] .board-card:hover,
+html[data-theme="dark"] .inbox-item:hover,
+html[data-theme="dark"] .calendar-selected-row:hover {
+  border-color: var(--line-strong);
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .board-column,
+html[data-theme="dark"] .calendar-day.is-other,
+html[data-theme="dark"] .gantt-view,
+html[data-theme="dark"] .calendar-undated {
+  background: #141416;
+}
+
+html[data-theme="dark"] .calendar-day.is-today {
+  background: rgba(10, 132, 255, 0.14);
+}
+
+html[data-theme="dark"] .calendar-day,
+html[data-theme="dark"] .calendar-bottom,
+html[data-theme="dark"] .calendar-selected,
+html[data-theme="dark"] .calendar-weekdays,
+html[data-theme="dark"] .calendar-grid,
+html[data-theme="dark"] .gantt-head-row,
+html[data-theme="dark"] .gantt-label,
+html[data-theme="dark"] .gantt-track,
+html[data-theme="dark"] .group-head,
+html[data-theme="dark"] .drawer-section,
+html[data-theme="dark"] .modal-head,
+html[data-theme="dark"] .modal-footer,
+html[data-theme="dark"] .settings-tabs,
+html[data-theme="dark"] .settings-nav {
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .calendar-view,
+html[data-theme="dark"] .calendar-grid-wrap,
+html[data-theme="dark"] .gantt-scroll,
+html[data-theme="dark"] .doc-scroll {
+  background: var(--card);
+}
+
+html[data-theme="dark"] .input,
+html[data-theme="dark"] .textarea,
+html[data-theme="dark"] .mini-select,
+html[data-theme="dark"] .ui-select,
+html[data-theme="dark"] .ui-date,
+html[data-theme="dark"] .date-field .ui-date.date-panel-input,
+html[data-theme="dark"] .quick-pill,
+html[data-theme="dark"] .drawer-field .field-input,
+html[data-theme="dark"] .drawer-field .mini-select,
+html[data-theme="dark"] .settings-form input,
+html[data-theme="dark"] .settings-form textarea,
+html[data-theme="dark"] .settings-form select {
+  border-color: var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .input[readonly] {
+  background: var(--surface-2);
+}
+
+html[data-theme="dark"] .btn-ghost,
+html[data-theme="dark"] .btn-white {
+  border-color: var(--line-strong);
+  background: var(--card);
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .btn-ghost:hover,
+html[data-theme="dark"] .btn-white:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .menu-item:hover,
+html[data-theme="dark"] .ui-select-option:hover {
+  background: var(--surface-2);
+}
+
+html[data-theme="dark"] .kbd,
+html[data-theme="dark"] kbd {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .modal-backdrop {
+  background: rgba(0, 0, 0, 0.58);
+}
+
+html[data-theme="dark"] .topbar-user:hover {
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.24);
+}
+
+html[data-theme="dark"] .theme-toggle {
+  color: #a1a1a6;
+}
+
+html[data-theme="dark"] .theme-toggle:hover {
+  color: #f5f5f7;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .topbar-new {
+  color: #fff;
+  background: #0a84ff;
+}
+
+html[data-theme="dark"] .topbar-new:hover {
+  background: #409cff;
+}
+
+html[data-theme="dark"] .list-title-line h1,
+html[data-theme="dark"] .list-description,
+html[data-theme="dark"] .doc-breadcrumb,
+html[data-theme="dark"] .settings-head h3 {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .list-description.is-muted,
+html[data-theme="dark"] .list-progress-count,
+html[data-theme="dark"] .view-tab,
+html[data-theme="dark"] .toolbar-btn,
+html[data-theme="dark"] .group-count,
+html[data-theme="dark"] .group-add,
+html[data-theme="dark"] .task-row-meta,
+html[data-theme="dark"] .task-row-date {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .view-tab:hover {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .view-tab.is-active {
+  color: #8ec5ff;
+  border-bottom-color: #0a84ff;
+}
+
+html[data-theme="dark"] .calendar-weekdays,
+html[data-theme="dark"] .calendar-day-head,
+html[data-theme="dark"] .gantt-timeline-head {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .calendar-day-num,
+html[data-theme="dark"] .gantt-label-name {
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .home-schedule-toggle {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .home-schedule-toggle button.is-active {
+  background: #48484a;
+  color: #fff;
+}
+
+html[data-theme="dark"] .inbox-side-card,
+html[data-theme="dark"] .inbox-item {
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .doc-toolbar-top,
+html[data-theme="dark"] .doc-canvas,
+html[data-theme="dark"] .doc-inner {
+  background: transparent;
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .doc-canvas {
+  background: var(--card);
+}
+
+html[data-theme="dark"] .doc-cover {
+  filter: saturate(0.8) brightness(0.8);
+}
+
+html[data-theme="dark"] .meeting-card,
+html[data-theme="dark"] .meeting-drawer-form,
+html[data-theme="dark"] .meeting-meta-field {
+  border-color: var(--line);
+  background: var(--card);
+}
+
+/* Home dashboard dark surfaces */
+html[data-theme="dark"] .apple-home {
+  --ink: #f5f5f7;
+  --ink-2: #d1d1d6;
+  --muted: #a1a1a6;
+  --muted-2: #8e8e93;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --brand: #0a84ff;
+  --brand-strong: #409cff;
+  --brand-soft: rgba(10, 132, 255, 0.16);
+  --brand-line: rgba(10, 132, 255, 0.3);
+  background: #000;
+}
+
+html[data-theme="dark"] .apple-home .home-hero {
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(120% 160% at 100% 0%, rgba(10, 132, 255, 0.16), transparent 55%),
+    radial-gradient(90% 130% at 0% 100%, rgba(44, 44, 46, 0.6), transparent 62%),
+    linear-gradient(145deg, #1c1c1e 0%, #171719 52%, #0c1b2b 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 18px 50px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme="dark"] .apple-home .home-hero h1 {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .apple-home .home-hero-main > p {
+  color: #a1a1a6;
+}
+
+html[data-theme="dark"] .apple-home .home-date {
+  color: #a1a1a6;
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(28, 28, 30, 0.7);
+}
+
+html[data-theme="dark"] .apple-home .home-hero-actions .btn-white {
+  color: #1d1d1f;
+  background: #f5f5f7;
+}
+
+html[data-theme="dark"] .apple-home .home-hero-actions .btn-white:hover {
+  background: #fff;
+}
+
+html[data-theme="dark"] .apple-home .home-hero-actions .btn-hero-ghost {
+  color: #f5f5f7;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(44, 44, 46, 0.7);
+}
+
+html[data-theme="dark"] .apple-home .home-hero-focus {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(44, 44, 46, 0.68);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 28px rgba(0, 0, 0, 0.25);
+}
+
+html[data-theme="dark"] .apple-home .hero-ring::after {
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .apple-home .hero-ring-inner strong {
+  color: #f5f5f7;
+}
+
+html[data-theme="dark"] .apple-home .hero-ring-inner span,
+html[data-theme="dark"] .apple-home .hero-focus-head,
+html[data-theme="dark"] .apple-home .hero-focus-foot {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .apple-home .stat-card {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #1c1c1e;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme="dark"] .apple-home .stat-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #202022;
+}
+
+html[data-theme="dark"] .apple-home .stat-icon {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .apple-home .stat-card.tone-violet .stat-icon {
+  background: rgba(94, 92, 230, 0.18);
+  color: #a6a4ff;
+}
+
+html[data-theme="dark"] .apple-home .stat-card.tone-orange .stat-icon {
+  background: rgba(255, 159, 10, 0.15);
+  color: #ffb340;
+}
+
+html[data-theme="dark"] .apple-home .stat-card.tone-green .stat-icon {
+  background: rgba(48, 209, 88, 0.14);
+  color: #4cd964;
+}
+
+html[data-theme="dark"] .apple-home .stat-card.tone-red .stat-icon {
+  background: rgba(255, 69, 58, 0.14);
+  color: #ff6961;
+}
+
+html[data-theme="dark"] .apple-home .stat-label,
+html[data-theme="dark"] .apple-home .panel-head p,
+html[data-theme="dark"] .apple-home .home-schedule-count {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .apple-home .stat-value,
+html[data-theme="dark"] .apple-home .panel-head h2 {
+  color: #f5f5f7;
+}
+
+html[data-theme="dark"] .apple-home .stat-hint {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .apple-home .home-schedule-panel {
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .apple-home .home-schedule-toggle {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .apple-home .home-schedule-toggle button.is-active {
+  color: #fff;
+  background: #48484a;
+}
+
+html[data-theme="dark"] .apple-home .my-task-row:hover,
+html[data-theme="dark"] .apple-home .home-activity-row:hover {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .apple-home .my-task-name,
+html[data-theme="dark"] .apple-home .home-activity-row p {
+  color: #d1d1d6;
+}
+
+html[data-theme="dark"] .apple-home .week-bar-track,
+html[data-theme="dark"] .apple-home .workload-track {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .apple-home .weekly-summary {
+  color: #8e8e93;
+}
+
+/* List rows */
+html[data-theme="dark"] .task-group-body {
+  background: #1c1c1e;
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .inline-add-trigger,
+html[data-theme="dark"] .inline-add-row {
+  background: transparent;
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .inline-add-trigger:hover {
+  background: #2c2c2e;
+  color: #f5f5f7;
+}
+
+html[data-theme="dark"] .task-row + .task-row {
+  border-top-color: var(--line);
+}
+
+/* Drawer header and empty surfaces */
+html[data-theme="dark"] .drawer-head {
+  border-color: var(--line);
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .dependency-empty,
+html[data-theme="dark"] .drawer-empty,
+html[data-theme="dark"] .checklist-empty,
+html[data-theme="dark"] .attachment-empty {
+  border-color: var(--line);
+  background: #1c1c1e;
+  color: #8e8e93;
+}
+
+/* Project overview */
+html[data-theme="dark"] .overview-hero {
+  border-color: var(--line);
+  background:
+    radial-gradient(65% 120% at 100% 0%, rgba(10, 132, 255, 0.12), transparent 65%),
+    #1c1c1e;
+}
+
+html[data-theme="dark"] .overview-hero-main h2,
+html[data-theme="dark"] .overview-hero-main p {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .overview-stat {
+  border-color: var(--line);
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .overview-stat > strong {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .overview-stat-top,
+html[data-theme="dark"] .overview-stat-foot,
+html[data-theme="dark"] .overview-stat > span:not(.overview-stat-foot) {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .key-action-empty,
+html[data-theme="dark"] .key-action-row,
+html[data-theme="dark"] .phase-row,
+html[data-theme="dark"] .overview-task-row {
+  border-color: var(--line);
+  background: #1c1c1e;
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .key-action-empty:hover,
+html[data-theme="dark"] .key-action-row:hover,
+html[data-theme="dark"] .phase-row:hover,
+html[data-theme="dark"] .overview-task-row:hover {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .key-action-empty span:first-of-type,
+html[data-theme="dark"] .key-action-main strong,
+html[data-theme="dark"] .phase-row-main strong,
+html[data-theme="dark"] .overview-task-name {
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .key-action-main span,
+html[data-theme="dark"] .phase-row-main span,
+html[data-theme="dark"] .overview-task-row span {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .overview-card-head h3,
+html[data-theme="dark"] .phase-panorama-head h4 {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .purpose-content,
+html[data-theme="dark"] .purpose-empty {
+  border-color: var(--line);
+  background: #1c1c1e;
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .vtimeline-row.is-today {
+  background: rgba(10, 132, 255, 0.09);
+  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.18);
+}
+
+html[data-theme="dark"] .vtimeline-axis {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+html[data-theme="dark"] .vtimeline-date {
+  color: #8e8e93;
+  background: rgba(28, 28, 30, 0.86);
+}
+
+html[data-theme="dark"] .vtimeline-date strong {
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .vtimeline-ms,
+html[data-theme="dark"] .vtimeline-task {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(44, 44, 46, 0.92);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+html[data-theme="dark"] .vtimeline-ms.is-completed {
+  background: rgba(44, 44, 46, 0.7);
+}
+
+html[data-theme="dark"] .vtimeline-ms-top strong,
+html[data-theme="dark"] .vtimeline-task-main strong {
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .vtimeline-ms-desc,
+html[data-theme="dark"] .vtimeline-task-main span,
+html[data-theme="dark"] .vtimeline-columns,
+html[data-theme="dark"] .vtimeline-phase-rail span,
+html[data-theme="dark"] .vtimeline-phase-rail em {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .vtimeline-phase-rail strong {
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .vtimeline-phase-section {
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+html[data-theme="dark"] .dependency-graph-empty,
+html[data-theme="dark"] .dependency-graph-side,
+html[data-theme="dark"] .dependency-graph-main,
+html[data-theme="dark"] .dependency-graph-canvas,
+html[data-theme="dark"] .dependency-drawer-section {
+  border-color: var(--line);
+  background: #1c1c1e;
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .dependency-node {
+  border-color: var(--line-strong);
+  background: #2c2c2e;
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .dependency-node.is-current {
+  background: rgba(10, 132, 255, 0.16);
+}
+
+html[data-theme="dark"] .dependency-node.is-upstream {
+  background: rgba(255, 159, 10, 0.15);
+}
+
+html[data-theme="dark"] .dependency-node.is-downstream {
+  background: rgba(48, 209, 88, 0.12);
+}
+
+html[data-theme="dark"] .topbar-search kbd,
+html[data-theme="dark"] .sidebar-search kbd {
+  color: #8e8e93;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .dependency-graph-legend,
+html[data-theme="dark"] .dependency-graph-empty p,
+html[data-theme="dark"] .dependency-graph-empty h3 {
+  color: #a1a1a6;
+}
+
+html[data-theme="dark"] .description-empty,
+html[data-theme="dark"] .drawer-empty-action,
+html[data-theme="dark"] .comment-composer,
+html[data-theme="dark"] .comment-composer input,
+html[data-theme="dark"] .comment-composer textarea {
+  border-color: var(--line);
+  background: #1c1c1e;
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .comment-row,
+html[data-theme="dark"] .activity-row,
+html[data-theme="dark"] .progress-entry {
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .doc-toolbar-top,
+html[data-theme="dark"] .doc-meta,
+html[data-theme="dark"] .doc-foot {
+  border-color: var(--line);
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .doc-title-input {
+  color: #f5f5f7;
+}
+
+html[data-theme="dark"] .doc-markdown-editor,
+html[data-theme="dark"] .doc-content {
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .doc-cover {
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .inbox-page,
+html[data-theme="dark"] .portfolio-page,
+html[data-theme="dark"] .meetings-view,
+html[data-theme="dark"] .retro-view {
+  background: #000;
+}
+
+html[data-theme="dark"] .inbox-side-card,
+html[data-theme="dark"] .inbox-item,
+html[data-theme="dark"] .portfolio-card,
+html[data-theme="dark"] .meeting-card,
+html[data-theme="dark"] .retro-card {
+  border-color: var(--line);
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .inbox-item:hover,
+html[data-theme="dark"] .meeting-card:hover {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .inbox-tabs,
+html[data-theme="dark"] .inbox-group-label {
+  border-color: var(--line);
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .settings-nav,
+html[data-theme="dark"] .settings-tabs {
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .settings-nav button,
+html[data-theme="dark"] .settings-tabs button {
+  color: #a1a1a6;
+}
+
+html[data-theme="dark"] .settings-nav button.is-active,
+html[data-theme="dark"] .settings-tabs button.is-active {
+  color: #8ec5ff;
+}
+
+html[data-theme="dark"] .settings-pane,
+html[data-theme="dark"] .settings-content,
+html[data-theme="dark"] .settings-form {
+  background: #1c1c1e;
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .settings-hint,
+html[data-theme="dark"] .settings-empty,
+html[data-theme="dark"] .field-label {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .settings-add-btn {
+  border-color: var(--line);
+  color: #8ec5ff;
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .status-setting-row,
+html[data-theme="dark"] .field-setting-row,
+html[data-theme="dark"] .contact-setting-row,
+html[data-theme="dark"] .automation-row {
+  border-color: var(--line);
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .search-modal,
+html[data-theme="dark"] .search-modal-panel,
+html[data-theme="dark"] .command-palette {
+  border-color: var(--line);
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .search-result,
+html[data-theme="dark"] .command-item {
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .search-result:hover,
+html[data-theme="dark"] .search-result.is-active,
+html[data-theme="dark"] .command-item:hover {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .modal-footer {
+  border-color: var(--line);
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .modal-footer .btn-ghost,
+html[data-theme="dark"] .modal-footer .btn-white {
+  border-color: var(--line-strong);
+  background: #2c2c2e;
+  color: #f5f5f7;
+}
+
+html[data-theme="dark"] .modal-footer .btn-ghost:hover,
+html[data-theme="dark"] .modal-footer .btn-white:hover {
+  background: #3a3a3c;
+}
+
+html[data-theme="dark"] .create-task-form,
+html[data-theme="dark"] .create-task-name,
+html[data-theme="dark"] .create-prop,
+html[data-theme="dark"] .create-more-toggle {
+  border-color: var(--line);
+  background: #1c1c1e;
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .create-prop {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .create-prop > span {
+  color: #a1a1a6;
+}
+
+html[data-theme="dark"] .create-prop .ui-select {
+  color: #f5f5f7;
+  background: transparent;
+}
+
+html[data-theme="dark"] .create-prop .ui-date {
+  color: #f5f5f7;
+  background: transparent;
+}
+
+html[data-theme="dark"] .create-task-name::placeholder {
+  color: #6e6e73;
+}
+
+html[data-theme="dark"] .create-task-hint {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .portfolio-hero,
+html[data-theme="dark"] .portfolio-stat {
+  border-color: var(--line);
+  background: #1c1c1e;
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .portfolio-hero h1,
+html[data-theme="dark"] .portfolio-stat strong {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .portfolio-hero p,
+html[data-theme="dark"] .portfolio-stat span,
+html[data-theme="dark"] .portfolio-stat em,
+html[data-theme="dark"] .portfolio-muted {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .portfolio-hero-mark {
+  background: rgba(10, 132, 255, 0.16);
+  color: #8ec5ff;
+}
+
+html[data-theme="dark"] .portfolio-toolbar,
+html[data-theme="dark"] .portfolio-search,
+html[data-theme="dark"] .portfolio-filter {
+  border-color: var(--line);
+  background: #1c1c1e;
+  color: #a1a1a6;
+}
+
+html[data-theme="dark"] .portfolio-filter.is-active {
+  color: #f5f5f7;
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .portfolio-search input {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .portfolio-card {
+  border-color: var(--line);
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .portfolio-card:hover {
+  background: #202022;
+}
+
+html[data-theme="dark"] .portfolio-card-title h3,
+html[data-theme="dark"] .portfolio-card-title p {
+  color: var(--ink-2);
+}
+
+.login-visual {
+  background:
+    radial-gradient(100% 70% at 85% 5%, rgba(10, 132, 255, 0.34), transparent 60%),
+    radial-gradient(80% 60% at 10% 90%, rgba(0, 60, 130, 0.48), transparent 60%),
+    linear-gradient(145deg, #17181c 0%, #1d2028 55%, #101923 100%);
+}
+
+.login-visual .logo-mark {
+  background: linear-gradient(145deg, #64b5ff 0%, #0071e3 58%, #0062c4 100%);
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.login-visual-glow-a {
+  background: radial-gradient(circle, rgba(10, 132, 255, 0.28), transparent 65%);
+}
+
+.login-visual-glow-b {
+  background: radial-gradient(circle, rgba(0, 90, 180, 0.24), transparent 65%);
+}
+
+.login-hero h1 span {
+  background: linear-gradient(100deg, #c9e8ff 10%, #64b5ff 55%, #d9f0ff 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.login-features li > span {
+  color: #b9e0ff;
+  border-color: rgba(10, 132, 255, 0.35);
+  background: rgba(10, 132, 255, 0.2);
+}
+
+.login-visual .eyebrow {
+  border-color: rgba(10, 132, 255, 0.2);
+  background: rgba(10, 132, 255, 0.12);
+  color: #b9e0ff;
+}
+
+html[data-theme="dark"] .login-page {
+  background: #000;
+}
+
+html[data-theme="dark"] .login-panel {
+  background: #1c1c1e;
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .login-heading h2 {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .login-heading p,
+html[data-theme="dark"] .login-switch,
+html[data-theme="dark"] .login-demo-help,
+html[data-theme="dark"] .login-local-note {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .input-with-icon input {
+  border-color: var(--line-strong);
+  background: #2c2c2e;
+  color: #f5f5f7;
+}
+
+html[data-theme="dark"] .input-with-icon > svg,
+html[data-theme="dark"] .input-action {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .btn-demo {
+  border-color: var(--line-strong);
+  background: #2c2c2e;
+  color: #f5f5f7;
+}
+
+html[data-theme="dark"] .btn-demo:hover {
+  background: #3a3a3c;
+}
+
+html[data-theme="dark"] .demo-hint {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .login-divider {
+  color: #6e6e73;
+}
+
+html[data-theme="dark"] .login-divider::before,
+html[data-theme="dark"] .login-divider::after {
+  background: var(--line);
+}
+
+html[data-theme="dark"] .login-demo-help code,
+html[data-theme="dark"] code {
+  border-color: var(--line);
+  background: #2c2c2e;
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .markdown-body blockquote {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: #2c2c2e;
+  color: #d1d1d6;
+}
+
+html[data-theme="dark"] .markdown-body code {
+  border-color: var(--line);
+  background: #2c2c2e;
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .markdown-body pre {
+  border-color: var(--line);
+  background: #0f0f10;
+}
+
+html[data-theme="dark"] .markdown-body table th,
+html[data-theme="dark"] .markdown-body table td {
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .markdown-body table th {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .gantt-view {
+  border-color: var(--line);
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .gantt-head-row {
+  border-color: var(--line);
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .gantt-month-row,
+html[data-theme="dark"] .gantt-day-row,
+html[data-theme="dark"] .gantt-row,
+html[data-theme="dark"] .gantt-unscheduled {
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .gantt-label-head span:first-child,
+html[data-theme="dark"] .gantt-label-name {
+  color: var(--ink-2);
+}
+
+html[data-theme="dark"] .gantt-label-head span:last-child,
+html[data-theme="dark"] .gantt-month,
+html[data-theme="dark"] .gantt-day-head,
+html[data-theme="dark"] .gantt-label-date,
+html[data-theme="dark"] .gantt-legend {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .gantt-day-head.is-weekend,
+html[data-theme="dark"] .gantt-day-cell.is-weekend {
+  background: #141416;
+}
+
+html[data-theme="dark"] .gantt-day-head.is-today,
+html[data-theme="dark"] .gantt-day-cell.is-today {
+  color: #8ec5ff;
+  background: rgba(10, 132, 255, 0.12);
+}
+
+html[data-theme="dark"] .gantt-label,
+html[data-theme="dark"] .gantt-label-head {
+  border-color: var(--line);
+  background: #1c1c1e !important;
+}
+
+html[data-theme="dark"] .gantt-bar {
+  color: #fff;
+  border-color: color-mix(in srgb, var(--bar-color) 50%, #2c2c2e);
+  background: color-mix(in srgb, var(--bar-color) 38%, #2c2c2e);
+}
+
+html[data-theme="dark"] .gantt-bar-progress {
+  background: color-mix(in srgb, var(--bar-color) 28%, transparent);
+}
+
+html[data-theme="dark"] .gantt-row:hover .gantt-label {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .gantt-day-cell {
+  border-color: #2a2a2d;
+}
+
+html[data-theme="dark"] .gantt-label:hover .gantt-label-name {
+  color: #8ec5ff;
+}
+
+html[data-theme="dark"] .gantt-bar-label,
+html[data-theme="dark"] .gantt-milestone-label {
+  color: #fff;
+}
+
+html[data-theme="dark"] .gantt-links path {
+  stroke: #77777d;
+}
+
+html[data-theme="dark"] .gantt-links marker path {
+  fill: #77777d;
+}
+
+html[data-theme="dark"] .gantt-unscheduled button {
+  color: #d1d1d6;
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .gantt-unscheduled button:hover {
+  color: #8ec5ff;
+  background: rgba(10, 132, 255, 0.16);
+}
+
+/* Calendar dark surfaces */
+html[data-theme="dark"] .calendar-toolbar,
+html[data-theme="dark"] .calendar-weekdays,
+html[data-theme="dark"] .calendar-grid,
+html[data-theme="dark"] .calendar-bottom,
+html[data-theme="dark"] .calendar-selected,
+html[data-theme="dark"] .calendar-undated {
+  border-color: var(--line);
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .calendar-weekdays,
+html[data-theme="dark"] .calendar-day-head,
+html[data-theme="dark"] .calendar-count,
+html[data-theme="dark"] .calendar-legend {
+  color: #8e8e93;
+}
+
+html[data-theme="dark"] .calendar-day {
+  border-color: var(--line);
+  background: #1c1c1e;
+}
+
+html[data-theme="dark"] .calendar-day.is-other {
+  background: #141416;
+}
+
+html[data-theme="dark"] .calendar-day.is-today {
+  background: rgba(10, 132, 255, 0.14);
+}
+
+html[data-theme="dark"] .calendar-day-num {
+  color: #d1d1d6;
+}
+
+html[data-theme="dark"] .calendar-day-add,
+html[data-theme="dark"] .calendar-more,
+html[data-theme="dark"] .calendar-empty,
+html[data-theme="dark"] .calendar-selected-row {
+  color: #a1a1a6;
+}
+
+html[data-theme="dark"] .calendar-selected-row:hover {
+  background: #2c2c2e;
+}
+
+html[data-theme="dark"] .calendar-task {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .calendar-bottom,
+html[data-theme="dark"] .calendar-selected {
+  background: #1c1c1e;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
